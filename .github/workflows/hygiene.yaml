@@ -1,0 +1,68 @@
+name: hygiene
+on:
+  pull_request:
+    branches:
+      - main
+jobs:
+  check:
+    name: check
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    permissions:
+      contents: read  # This is required for actions/checkout
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: cachix/install-nix-action@v31
+        with:
+          nix_path: nixpkgs=channel:nixos-unstable
+
+      - name: format
+        run: make fmt
+
+      - name: lint
+        run: make lint
+
+      - name: tidy
+        run: make tidy
+
+      - name: check
+        run: git diff --exit-code
+
+  test: 
+    name: test
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    permissions:
+      contents: read  # This is required for actions/checkout
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          
+      - uses: cachix/install-nix-action@v31
+        with:
+          nix_path: nixpkgs=channel:nixos-unstable
+
+      - name: test
+        run: make test
+
+  security:
+    name: security
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    permissions:
+      contents: read  # This is required for actions/checkout
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: cachix/install-nix-action@v31
+        with:
+          nix_path: nixpkgs=channel:nixos-unstable
+
+      - name: security scanning
+        run: make security
