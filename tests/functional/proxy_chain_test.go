@@ -87,7 +87,7 @@ func TestProxyChainWithMultipleServices(t *testing.T) {
 			if err != nil {
 				return false
 			}
-			defer resp.Body.Close()
+			defer func() { _ = resp.Body.Close() }()
 			return resp.StatusCode == http.StatusOK
 		}, 30*time.Second, 500*time.Millisecond, "Service on port %s did not become ready in time", port)
 	}

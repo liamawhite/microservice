@@ -1,4 +1,4 @@
-.PHONY: fmt lint tidy docker-build docker-push test test-coverage
+.PHONY: fmt lint tidy docker-build check test test-coverage security help
 
 SHELL := nix develop --command bash
 
@@ -37,8 +37,8 @@ docker-build:
 		$(if $(filter true,$(DOCKER_PUSH)),--push,--load) \
 		.
 
-# Development workflow: format, lint, and tidy
-dev: fmt lint tidy
+# Check: format, lint, and tidy
+check: fmt lint tidy
 
 # Run all tests
 test:
@@ -59,7 +59,7 @@ help:
 	@echo "  make lint         - Run linter"
 	@echo "  make tidy         - Tidy Go modules"
 	@echo "  make docker-build - Build multi-platform Docker image (DOCKER_PUSH=true to push)"
-	@echo "  make dev          - Run fmt, lint, and tidy"
+	@echo "  make check        - Run fmt, lint, and tidy"
 	@echo "  make test         - Run all tests"
 	@echo "  make test-cov     - Run tests with coverage"
 	@echo "  make help         - Show this help message" 
