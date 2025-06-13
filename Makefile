@@ -1,4 +1,4 @@
-.PHONY: fmt lint tidy docker-build docker-push
+.PHONY: fmt lint tidy docker-build docker-push test test-coverage
 
 SHELL := nix develop --command bash
 
@@ -39,13 +39,27 @@ docker-push:
 # Development workflow: format, lint, and tidy
 dev: fmt lint tidy
 
+# Run all tests
+test:
+	go test -v ./...
+
+# Run tests with coverage
+test-coverage:
+	go test -v -coverprofile=coverage.out ./...
+	go tool cover -html=coverage.out
+
+security:
+	gosec -severity medium -confidence high -exclude-generated ./...
+
 # Help command
 help:
 	@echo "Available commands:"
-	@echo "  make fmt         - Format all Go files"
-	@echo "  make lint        - Run golangci-lint"
-	@echo "  make tidy        - Tidy and verify Go module dependencies"
+	@echo "  make fmt          - Format Go code"
+	@echo "  make lint         - Run linter"
+	@echo "  make tidy         - Tidy Go modules"
 	@echo "  make docker-build - Build Docker image"
 	@echo "  make docker-push  - Push Docker image to registry"
-	@echo "  make dev         - Run fmt, lint, and tidy"
-	@echo "  make help        - Show this help message" 
+	@echo "  make dev          - Run fmt, lint, and tidy"
+	@echo "  make test         - Run all tests"
+	@echo "  make test-cov     - Run tests with coverage"
+	@echo "  make help         - Show this help message" 

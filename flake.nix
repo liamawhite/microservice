@@ -14,8 +14,9 @@
           devShells.default = pkgs.mkShell {
             buildInputs = [
               git
-              golang
+              go
               golangci-lint
+              gosec
             ];
           };
         }
