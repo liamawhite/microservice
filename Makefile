@@ -7,7 +7,7 @@ VERSION=$(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 BUILD_TIME=$(shell date -u '+%Y-%m-%d_%H:%M:%S')
 
 # Docker variables
-DOCKER_REGISTRY?=docker.io
+DOCKER_REGISTRY?=ghcr.io
 DOCKER_IMAGE?=$(DOCKER_REGISTRY)/liamawhite/microservice
 DOCKER_TAG?=$(VERSION)
 
