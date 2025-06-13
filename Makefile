@@ -10,6 +10,8 @@ BUILD_TIME=$(shell date -u '+%Y-%m-%d_%H:%M:%S')
 DOCKER_REGISTRY?=ghcr.io
 DOCKER_IMAGE?=$(DOCKER_REGISTRY)/liamawhite/microservice
 DOCKER_TAG?=$(VERSION)
+DOCKER_PLATFORMS?=linux/amd64,linux/arm64
+DOCKER_PUSH?=false
 
 # Format all Go files
 fmt:
@@ -24,17 +26,16 @@ tidy:
 	go mod tidy
 	go mod verify
 
-# Build Docker image
+# Build multi-platform Docker image (optionally push)
 docker-build:
-	docker build \
+	docker buildx build \
+		--platform $(DOCKER_PLATFORMS) \
 		--build-arg VERSION=$(VERSION) \
 		--build-arg BUILD_TIME=$(BUILD_TIME) \
 		-t $(DOCKER_IMAGE):$(DOCKER_TAG) \
+		-t $(DOCKER_IMAGE):latest \
+		$(if $(filter true,$(DOCKER_PUSH)),--push,--load) \
 		.
-
-# Push Docker image
-docker-push:
-	docker push $(DOCKER_IMAGE):$(DOCKER_TAG)
 
 # Development workflow: format, lint, and tidy
 dev: fmt lint tidy
@@ -57,8 +58,7 @@ help:
 	@echo "  make fmt          - Format Go code"
 	@echo "  make lint         - Run linter"
 	@echo "  make tidy         - Tidy Go modules"
-	@echo "  make docker-build - Build Docker image"
-	@echo "  make docker-push  - Push Docker image to registry"
+	@echo "  make docker-build - Build multi-platform Docker image (DOCKER_PUSH=true to push)"
 	@echo "  make dev          - Run fmt, lint, and tidy"
 	@echo "  make test         - Run all tests"
 	@echo "  make test-cov     - Run tests with coverage"

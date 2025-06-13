@@ -1,4 +1,4 @@
-name: Image
+name: publish
 
 on:
   pull_request:
@@ -12,7 +12,7 @@ env:
 
 jobs:
   ghcr:
-    name: Build and Push to GHCR
+    name: ghcr.io
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -36,11 +36,7 @@ jobs:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Build Docker image
-      run: DOCKER_TAG=latest make docker-build
-
-    - name: Tag and push to registry with sha and latest
+    - name: Build and push multi-platform image
       run: |
-        docker tag ghcr.io/liamawhite/microservice:latest ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
-        docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
-        docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }} 
+        DOCKER_TAG=${{ github.sha }} DOCKER_PUSH=true make docker-build
+        DOCKER_TAG=latest DOCKER_PUSH=true make docker-build
