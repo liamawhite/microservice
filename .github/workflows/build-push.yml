@@ -1,4 +1,4 @@
-name: Build and Push Container Image
+name: Image
 
 on:
   pull_request:
@@ -11,7 +11,7 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-  build-and-push:
+  ghcr:
     name: Build and Push to GHCR
     runs-on: ubuntu-latest
     permissions:
@@ -37,11 +37,10 @@ jobs:
         password: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Build Docker image
-      run: make docker-build
+      run: DOCKER_TAG=latest make docker-build
 
-    - name: Tag and push to registry
+    - name: Tag and push to registry with sha and latest
       run: |
-        docker tag ghcr.io/liamawhite/microservice:dev ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
-        docker tag ghcr.io/liamawhite/microservice:dev ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+        docker tag ghcr.io/liamawhite/microservice:latest ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
         docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
         docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }} 
