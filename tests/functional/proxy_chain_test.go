@@ -80,7 +80,17 @@ func TestProxyChainWithMultipleServices(t *testing.T) {
 	}
 
 	// Wait for all services to be ready
-	time.Sleep(2 * time.Second)
+	for _, port := range servicePorts {
+		require.Eventually(t, func() bool {
+			url := fmt.Sprintf("http://localhost:%s/health", port)
+			resp, err := http.Get(url)
+			if err != nil {
+				return false
+			}
+			defer resp.Body.Close()
+			return resp.StatusCode == http.StatusOK
+		}, 30*time.Second, 500*time.Millisecond, "Service on port %s did not become ready in time", port)
+	}
 
 	// Test 1: Direct health checks to verify all services are running
 	t.Run("health_checks", func(t *testing.T) {
