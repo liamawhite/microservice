@@ -6,7 +6,7 @@ on:
 jobs:
   check:
     name: check
-    runs-on: default-runner-set
+    runs-on: ubuntu-latest
     continue-on-error: true
     permissions:
       contents: read  # This is required for actions/checkout
@@ -33,7 +33,7 @@ jobs:
 
   test: 
     name: test
-    runs-on: default-runner-set
+    runs-on: ubuntu-latest
     continue-on-error: true
     permissions:
       contents: read  # This is required for actions/checkout
@@ -51,7 +51,7 @@ jobs:
 
   security:
     name: security
-    runs-on: default-runner-set
+    runs-on: ubuntu-latest
     continue-on-error: true
     permissions:
       contents: read  # This is required for actions/checkout
