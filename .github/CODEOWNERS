@@ -1,0 +1,5 @@
+# Global owners - these will be requested for review on all PRs unless a more specific rule applies
+* @liamawhite
+
+# Protect the CODEOWNERS file itself
+/.github/CODEOWNERS @liamawhite
