@@ -17,6 +17,7 @@
               go
               golangci-lint
               gosec
+              kubernetes-helm
             ];
           };
         }
