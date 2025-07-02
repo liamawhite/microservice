@@ -44,7 +44,7 @@ The Makefile automatically uses the Nix shell via `SHELL := nix develop --comman
 ### Development
 - `make check` - Format, lint, and tidy (run before committing)
 - `make test` - Run all tests
-- `make test-coverage` - Run tests with coverage report
+- `make test-coverage` - Run tests with coverage report and open HTML coverage
 - `make fmt` - Format Go code
 - `make lint` - Run golangci-lint
 - `make tidy` - Tidy Go modules
