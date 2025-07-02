@@ -1,0 +1,17 @@
+apiVersion: v2
+name: microservice
+description: A Helm chart for the composable mock microservice proxy
+type: application
+version: 0.1.0
+appVersion: "latest"
+keywords:
+  - microservice
+  - proxy
+  - mock
+  - testing
+home: https://github.com/liamawhite/microservice
+sources:
+  - https://github.com/liamawhite/microservice
+maintainers:
+  - name: Liam White
+    url: https://github.com/liamawhite

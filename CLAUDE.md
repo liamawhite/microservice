@@ -79,6 +79,22 @@ Functional tests create isolated Docker networks where containers communicate us
 - Explicit port configurations for each service
 - Parallel container startup for performance
 
+## Helm Chart
+
+The service includes a Helm chart for Kubernetes deployment located in the `chart/` directory.
+
+### Installation
+
+#### From Local Chart
+```bash
+# Install from local chart directory
+helm install my-microservice ./chart/
+
+# Package and install
+helm package chart/ --destination .
+helm install my-microservice ./microservice-0.1.0.tgz
+```
+
 ## Configuration
 
 ### Service Configuration
