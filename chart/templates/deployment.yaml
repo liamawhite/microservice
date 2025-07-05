@@ -1,66 +1,72 @@
+{{- $effectiveServices := include "microservice.effectiveServices" . | fromYaml -}}
+{{- range $effectiveServices }}
+{{- $service := . -}}
+{{- $serviceConfig := include "microservice.getServiceConfig" (dict "service" $service "root" $) | fromYaml -}}
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "microservice.fullname" . }}
+  name: {{ include "microservice.serviceName" (dict "service" $service "root" $) }}
   labels:
-    {{- include "microservice.labels" . | nindent 4 }}
+    {{- include "microservice.serviceLabels" (dict "service" $service "root" $) | nindent 4 }}
 spec:
-  {{- if not .Values.autoscaling.enabled }}
-  replicas: {{ .Values.replicaCount }}
+  {{- if not $serviceConfig.autoscaling.enabled }}
+  replicas: {{ $serviceConfig.replicaCount }}
   {{- end }}
   selector:
     matchLabels:
-      {{- include "microservice.selectorLabels" . | nindent 6 }}
+      {{- include "microservice.serviceSelectorLabels" (dict "service" $service "root" $) | nindent 6 }}
   template:
     metadata:
-      {{- with .Values.podAnnotations }}
+      {{- with $serviceConfig.podAnnotations }}
       annotations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       labels:
-        {{- include "microservice.labels" . | nindent 8 }}
-        {{- with .Values.podLabels }}
+        {{- include "microservice.serviceLabels" (dict "service" $service "root" $) | nindent 8 }}
+        {{- with $serviceConfig.podLabels }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
     spec:
-      {{- with .Values.imagePullSecrets }}
+      {{- with (coalesce $.Values.imagePullSecrets $serviceConfig.imagePullSecrets) }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      serviceAccountName: {{ include "microservice.serviceAccountName" . }}
+      serviceAccountName: {{ include "microservice.serviceAccountNameForService" (dict "service" $service "root" $) }}
       securityContext:
-        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+        {{- toYaml $serviceConfig.podSecurityContext | nindent 8 }}
       containers:
-        - name: {{ .Chart.Name }}
+        - name: {{ $.Chart.Name }}
           securityContext:
-            {{- toYaml .Values.securityContext | nindent 12 }}
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
-          imagePullPolicy: {{ .Values.image.pullPolicy }}
+            {{- toYaml $serviceConfig.securityContext | nindent 12 }}
+          image: "{{ $serviceConfig.image.repository }}:{{ $serviceConfig.image.tag | default $.Chart.AppVersion }}"
+          imagePullPolicy: {{ $serviceConfig.image.pullPolicy }}
           args:
-            - "-port={{ .Values.config.port }}"
-            - "-service-name={{ .Values.config.serviceName }}"
-            - "-timeout={{ .Values.config.timeout }}"
-            - "-log-level={{ .Values.config.logLevel }}"
-            - "-log-format={{ .Values.config.logFormat }}"
+            - "-port={{ $serviceConfig.config.port }}"
+            - "-service-name={{ $serviceConfig.config.serviceName }}"
+            - "-timeout={{ $serviceConfig.config.timeout }}"
+            - "-log-level={{ $serviceConfig.config.logLevel }}"
+            - "-log-format={{ $serviceConfig.config.logFormat }}"
           ports:
             - name: http
-              containerPort: {{ .Values.config.port }}
+              containerPort: {{ $serviceConfig.config.port }}
               protocol: TCP
           livenessProbe:
-            {{- toYaml .Values.livenessProbe | nindent 12 }}
+            {{- toYaml $serviceConfig.livenessProbe | nindent 12 }}
           readinessProbe:
-            {{- toYaml .Values.readinessProbe | nindent 12 }}
+            {{- toYaml $serviceConfig.readinessProbe | nindent 12 }}
           resources:
-            {{- toYaml .Values.resources | nindent 12 }}
-      {{- with .Values.nodeSelector }}
+            {{- toYaml $serviceConfig.resources | nindent 12 }}
+      {{- with $serviceConfig.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- with .Values.affinity }}
+      {{- with $serviceConfig.affinity }}
       affinity:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- with .Values.tolerations }}
+      {{- with $serviceConfig.tolerations }}
       tolerations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+{{- end }}

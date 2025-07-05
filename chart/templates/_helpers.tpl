@@ -50,13 +50,66 @@ app.kubernetes.io/name: {{ include "microservice.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 
+
 {{/*
-Create the name of the service account to use
+Multi-service helpers
 */}}
-{{- define "microservice.serviceAccountName" -}}
-{{- if .Values.serviceAccount.create }}
-{{- default (include "microservice.fullname" .) .Values.serviceAccount.name }}
+
+{{/*
+Create a service-specific name
+*/}}
+{{- define "microservice.serviceName" -}}
+{{- $serviceName := .service.name -}}
+{{- $globalName := include "microservice.fullname" .root -}}
+{{- printf "%s-%s" $globalName $serviceName | trunc 63 | trimSuffix "-" -}}
+{{- end }}
+
+{{/*
+Create service-specific labels
+*/}}
+{{- define "microservice.serviceLabels" -}}
+{{ include "microservice.labels" .root }}
+app.kubernetes.io/component: {{ .service.name }}
+{{- end }}
+
+{{/*
+Create service-specific selector labels
+*/}}
+{{- define "microservice.serviceSelectorLabels" -}}
+{{ include "microservice.selectorLabels" .root }}
+app.kubernetes.io/component: {{ .service.name }}
+{{- end }}
+
+
+{{/*
+Get effective services list
+*/}}
+{{- define "microservice.effectiveServices" -}}
+{{- .Values.services | toYaml -}}
+{{- end }}
+
+{{/*
+Get service config by merging defaults with service overrides
+*/}}
+{{- define "microservice.getServiceConfig" -}}
+{{- $service := .service -}}
+{{- $defaults := .root.Values.defaults -}}
+{{- $result := mergeOverwrite $defaults $service -}}
+{{- $result -}}
+{{- end }}
+
+{{/*
+Create the name of the service account to use for a specific service
+*/}}
+{{- define "microservice.serviceAccountNameForService" -}}
+{{- $config := include "microservice.getServiceConfig" . | fromYaml -}}
+{{- if $config.serviceAccount.create }}
+{{- if $config.serviceAccount.name -}}
+{{- $config.serviceAccount.name }}
+{{- else -}}
+{{- include "microservice.serviceName" . }}
+{{- end -}}
 {{- else }}
-{{- default "default" .Values.serviceAccount.name }}
+{{- default "default" $config.serviceAccount.name }}
 {{- end }}
 {{- end }}
