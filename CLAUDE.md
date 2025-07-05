@@ -55,7 +55,7 @@ The Makefile automatically uses the Nix shell via `SHELL := nix develop --comman
 - `go test -v ./tests/functional` - Run functional tests (requires Docker)
 
 ### Security
-- `make security` - Run gosec security scanner
+- `make security` - Run gosec security scanner with medium severity and high confidence
 
 ### Docker
 - `make docker-build` - Build multi-platform Docker image
@@ -81,18 +81,70 @@ Functional tests create isolated Docker networks where containers communicate us
 
 ## Helm Chart
 
-The service includes a Helm chart for Kubernetes deployment located in the `chart/` directory.
+The service includes a Helm chart for Kubernetes deployment located in the `chart/` directory. The chart supports multi-service deployments with configurable defaults and per-service overrides.
 
 ### Installation
 
-#### From Local Chart
-```bash
-# Install from local chart directory
-helm install my-microservice ./chart/
+The chart includes example values files for different deployment scenarios:
 
-# Package and install
-helm package chart/ --destination .
-helm install my-microservice ./microservice-0.1.0.tgz
+#### Single Service Deployment
+```bash
+helm install my-microservice ./chart/ -f values-single.yaml
+```
+
+#### Three Services Deployment
+```bash
+helm install my-topology ./chart/ -f values-three-services.yaml
+```
+
+#### Custom Configuration
+```bash
+# Create your own values file
+cp chart/values-single.yaml my-values.yaml
+# Edit my-values.yaml as needed
+helm install my-deployment ./chart/ -f my-values.yaml
+```
+
+#### Example Values Files
+
+**Single Service** (`values-single.yaml`):
+- Single microservice instance
+- Basic resource limits
+- Standard configuration
+
+**Three Services** (`values-three-services.yaml`):
+- Service A: Entry point (port 8080)
+- Service B: Middle service with enhanced resources (port 8081)
+- Service C: Final service with autoscaling and anti-affinity (port 8082)
+
+Both examples demonstrate the flexibility of the defaults/services structure.
+
+### Multi-Service Configuration
+
+The chart supports a `defaults` section for common configuration and a `services` array where each service can override defaults:
+
+- **defaults**: Base configuration applied to all services
+- **services**: Array of service definitions with per-service overrides
+- **global**: Global settings that apply to all services
+
+Each service in the array creates:
+- A separate Deployment with unique name: `<release-name>-<service-name>`
+- A separate Service for network access
+- Optional HPA if autoscaling is enabled
+- Service accounts (shared or per-service based on configuration)
+
+### Testing Multi-Service Topologies
+
+With the multi-service deployment, you can test proxy chains:
+
+```bash
+# Chain through service-a -> service-b -> service-c
+kubectl port-forward service/my-topology-service-a 8080:8080
+curl http://localhost:8080/proxy/my-topology-service-b:8081/proxy/my-topology-service-c:8082
+
+# Direct access to service-b
+kubectl port-forward service/my-topology-service-b 8081:8081
+curl http://localhost:8081/health
 ```
 
 ## Configuration

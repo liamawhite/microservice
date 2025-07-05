@@ -1,32 +1,38 @@
-{{- if .Values.autoscaling.enabled }}
+{{- $effectiveServices := include "microservice.effectiveServices" . | fromYaml -}}
+{{- range $effectiveServices }}
+{{- $service := . -}}
+{{- $serviceConfig := include "microservice.getServiceConfig" (dict "service" $service "root" $) | fromYaml -}}
+{{- if $serviceConfig.autoscaling.enabled }}
+---
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
-  name: {{ include "microservice.fullname" . }}
+  name: {{ include "microservice.serviceName" (dict "service" $service "root" $) }}
   labels:
-    {{- include "microservice.labels" . | nindent 4 }}
+    {{- include "microservice.serviceLabels" (dict "service" $service "root" $) | nindent 4 }}
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
     kind: Deployment
-    name: {{ include "microservice.fullname" . }}
-  minReplicas: {{ .Values.autoscaling.minReplicas }}
-  maxReplicas: {{ .Values.autoscaling.maxReplicas }}
+    name: {{ include "microservice.serviceName" (dict "service" $service "root" $) }}
+  minReplicas: {{ $serviceConfig.autoscaling.minReplicas }}
+  maxReplicas: {{ $serviceConfig.autoscaling.maxReplicas }}
   metrics:
-    {{- if .Values.autoscaling.targetCPUUtilizationPercentage }}
+    {{- if $serviceConfig.autoscaling.targetCPUUtilizationPercentage }}
     - type: Resource
       resource:
         name: cpu
         target:
           type: Utilization
-          averageUtilization: {{ .Values.autoscaling.targetCPUUtilizationPercentage }}
+          averageUtilization: {{ $serviceConfig.autoscaling.targetCPUUtilizationPercentage }}
     {{- end }}
-    {{- if .Values.autoscaling.targetMemoryUtilizationPercentage }}
+    {{- if $serviceConfig.autoscaling.targetMemoryUtilizationPercentage }}
     - type: Resource
       resource:
         name: memory
         target:
           type: Utilization
-          averageUtilization: {{ .Values.autoscaling.targetMemoryUtilizationPercentage }}
+          averageUtilization: {{ $serviceConfig.autoscaling.targetMemoryUtilizationPercentage }}
     {{- end }}
+{{- end }}
 {{- end }}

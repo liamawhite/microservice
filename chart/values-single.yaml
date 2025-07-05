@@ -1,20 +1,15 @@
-# Default values for all services - can be overridden per service
+# Single service deployment example
+# Usage: helm install my-microservice ./chart/ -f values-single.yaml
 
 # Global chart configuration
-# nameOverride: Override the chart name part in resource names
-#   Default: "microservice" -> with release "my-app" creates "my-app-microservice-service-a"
-#   Override: "proxy" -> with release "my-app" creates "my-app-proxy-service-a"
+# nameOverride: Override chart name in resource names (e.g., "proxy" -> my-app-proxy-microservice)
 nameOverride: ""
-
-# fullnameOverride: Completely override the base name, ignoring release name
-#   Default: "" -> uses release name + chart name: "my-app-microservice-service-a"
-#   Override: "topology" -> ignores release name: "topology-service-a"
-#   Override: "" (empty string) -> very clean names: "service-a"
+# fullnameOverride: Complete control over base name (e.g., "my-service" -> my-service-microservice)
 fullnameOverride: ""
-
-# imagePullSecrets: Secrets for pulling images from private registries
+# imagePullSecrets: Secrets for private registries
 imagePullSecrets: []
 
+# Default values for all services
 defaults:
   replicaCount: 1
 
@@ -40,7 +35,13 @@ defaults:
     type: ClusterIP
     port: 8080
 
-  resources: {}
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "100m"
+    limits:
+      memory: "256Mi"
+      cpu: "200m"
 
   livenessProbe:
     httpGet:
@@ -75,9 +76,7 @@ defaults:
     logLevel: "info"
     logFormat: "json"
 
-# Array of services to deploy - each can override defaults
-# See values-single.yaml and values-three-services.yaml for examples
+# Single service configuration
 services:
   - name: "microservice"
-    # Uses all defaults - customize as needed
-
+    # Uses all defaults - no overrides needed

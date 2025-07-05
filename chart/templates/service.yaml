@@ -1,15 +1,21 @@
+{{- $effectiveServices := include "microservice.effectiveServices" . | fromYaml -}}
+{{- range $effectiveServices }}
+{{- $service := . -}}
+{{- $serviceConfig := include "microservice.getServiceConfig" (dict "service" $service "root" $) | fromYaml -}}
+---
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ include "microservice.fullname" . }}
+  name: {{ include "microservice.serviceName" (dict "service" $service "root" $) }}
   labels:
-    {{- include "microservice.labels" . | nindent 4 }}
+    {{- include "microservice.serviceLabels" (dict "service" $service "root" $) | nindent 4 }}
 spec:
-  type: {{ .Values.service.type }}
+  type: {{ $serviceConfig.service.type }}
   ports:
-    - port: {{ .Values.service.port }}
+    - port: {{ $serviceConfig.service.port }}
       targetPort: http
       protocol: TCP
       name: http
   selector:
-    {{- include "microservice.selectorLabels" . | nindent 4 }}
+    {{- include "microservice.serviceSelectorLabels" (dict "service" $service "root" $) | nindent 4 }}
+{{- end }}
