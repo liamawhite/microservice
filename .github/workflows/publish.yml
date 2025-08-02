@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - main
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
 
 env:
@@ -43,5 +46,11 @@ jobs:
 
     - name: Package and push Helm chart
       run: |
-        HELM_VERSION=${{ github.sha }} HELM_APP_VERSION=${{ github.sha }} make helm-push
-        HELM_VERSION=latest HELM_APP_VERSION=latest make helm-push
+        if [ "${{ github.event_name }}" = "pull_request" ]; then
+          # For PRs, only package (don't push)
+          make helm-package
+        else
+          # For main branch, package and push
+          make helm-push
+          HELM_VERSION=0.0.0-latest HELM_APP_VERSION=latest make helm-push
+        fi

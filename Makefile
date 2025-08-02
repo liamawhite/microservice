@@ -16,7 +16,7 @@ DOCKER_PUSH?=false
 # Helm variables
 HELM_REGISTRY?=oci://$(DOCKER_REGISTRY)/liamawhite
 HELM_CHART_NAME?=microservice
-HELM_VERSION?=$(VERSION)
+HELM_VERSION?=$(shell echo "$(VERSION)" | sed 's/^v//' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+' || echo "0.0.0-$(VERSION)")
 HELM_APP_VERSION?=$(VERSION)
 
 # Format all Go files
