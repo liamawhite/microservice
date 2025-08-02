@@ -1,4 +1,4 @@
-.PHONY: fmt lint tidy docker-build check test test-coverage security help
+.PHONY: fmt lint tidy docker-build check test test-coverage security helm-package helm-push help
 
 SHELL := nix develop --command bash
 
@@ -12,6 +12,12 @@ DOCKER_IMAGE?=$(DOCKER_REGISTRY)/liamawhite/microservice
 DOCKER_TAG?=$(VERSION)
 DOCKER_PLATFORMS?=linux/amd64,linux/arm64
 DOCKER_PUSH?=false
+
+# Helm variables
+HELM_REGISTRY?=oci://$(DOCKER_REGISTRY)/liamawhite
+HELM_CHART_NAME?=microservice
+HELM_VERSION?=$(VERSION)
+HELM_APP_VERSION?=$(VERSION)
 
 # Format all Go files
 fmt:
@@ -52,6 +58,14 @@ test-coverage:
 security:
 	gosec -severity medium -confidence high -exclude-generated ./...
 
+# Package Helm chart
+helm-package:
+	helm package chart/ --version $(HELM_VERSION) --app-version $(HELM_APP_VERSION)
+
+# Push Helm chart to OCI registry
+helm-push: helm-package
+	helm push $(HELM_CHART_NAME)-$(HELM_VERSION).tgz $(HELM_REGISTRY)
+
 # Help command
 help:
 	@echo "Available commands:"
@@ -59,6 +73,8 @@ help:
 	@echo "  make lint         - Run linter"
 	@echo "  make tidy         - Tidy Go modules"
 	@echo "  make docker-build - Build multi-platform Docker image (DOCKER_PUSH=true to push)"
+	@echo "  make helm-package - Package Helm chart"
+	@echo "  make helm-push    - Package and push Helm chart to OCI registry"
 	@echo "  make check        - Run fmt, lint, and tidy"
 	@echo "  make test         - Run all tests"
 	@echo "  make test-cov     - Run tests with coverage"

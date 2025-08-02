@@ -40,3 +40,8 @@ jobs:
       run: |
         DOCKER_TAG=${{ github.sha }} DOCKER_PUSH=true make docker-build
         DOCKER_TAG=latest DOCKER_PUSH=true make docker-build
+
+    - name: Package and push Helm chart
+      run: |
+        HELM_VERSION=${{ github.sha }} HELM_APP_VERSION=${{ github.sha }} make helm-push
+        HELM_VERSION=latest HELM_APP_VERSION=latest make helm-push
