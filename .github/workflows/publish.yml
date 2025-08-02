@@ -43,5 +43,5 @@ jobs:
 
     - name: Package and push Helm chart
       run: |
-        HELM_VERSION=${{ github.sha }} HELM_APP_VERSION=${{ github.sha }} make helm-push
-        HELM_VERSION=latest HELM_APP_VERSION=latest make helm-push
+        make helm-push
+        HELM_VERSION=0.0.0-latest HELM_APP_VERSION=latest make helm-push
