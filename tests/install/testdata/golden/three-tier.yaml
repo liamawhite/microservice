@@ -1,0 +1,359 @@
+---
+# Source: microservice/templates/serviceaccount.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: test-release-microservice-frontend
+  labels:
+    helm.sh/chart: microservice-0.1.0
+    app.kubernetes.io/name: microservice
+    app.kubernetes.io/instance: test-release
+    app.kubernetes.io/version: "latest"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: frontend
+automountServiceAccountToken: true---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: test-release-microservice-backend
+  labels:
+    helm.sh/chart: microservice-0.1.0
+    app.kubernetes.io/name: microservice
+    app.kubernetes.io/instance: test-release
+    app.kubernetes.io/version: "latest"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: backend
+automountServiceAccountToken: true---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: test-release-microservice-database
+  labels:
+    helm.sh/chart: microservice-0.1.0
+    app.kubernetes.io/name: microservice
+    app.kubernetes.io/instance: test-release
+    app.kubernetes.io/version: "latest"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: database
+automountServiceAccountToken: true
+---
+# Source: microservice/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: test-release-microservice-frontend
+  labels:
+    helm.sh/chart: microservice-0.1.0
+    app.kubernetes.io/name: microservice
+    app.kubernetes.io/instance: test-release
+    app.kubernetes.io/version: "latest"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: frontend
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8080
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    app.kubernetes.io/name: microservice
+    app.kubernetes.io/instance: test-release
+    app.kubernetes.io/component: frontend---
+apiVersion: v1
+kind: Service
+metadata:
+  name: test-release-microservice-backend
+  labels:
+    helm.sh/chart: microservice-0.1.0
+    app.kubernetes.io/name: microservice
+    app.kubernetes.io/instance: test-release
+    app.kubernetes.io/version: "latest"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: backend
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8081
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    app.kubernetes.io/name: microservice
+    app.kubernetes.io/instance: test-release
+    app.kubernetes.io/component: backend---
+apiVersion: v1
+kind: Service
+metadata:
+  name: test-release-microservice-database
+  labels:
+    helm.sh/chart: microservice-0.1.0
+    app.kubernetes.io/name: microservice
+    app.kubernetes.io/instance: test-release
+    app.kubernetes.io/version: "latest"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: database
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8082
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    app.kubernetes.io/name: microservice
+    app.kubernetes.io/instance: test-release
+    app.kubernetes.io/component: database
+---
+# Source: microservice/templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: test-release-microservice-frontend
+  labels:
+    helm.sh/chart: microservice-0.1.0
+    app.kubernetes.io/name: microservice
+    app.kubernetes.io/instance: test-release
+    app.kubernetes.io/version: "latest"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: frontend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: microservice
+      app.kubernetes.io/instance: test-release
+      app.kubernetes.io/component: frontend
+  template:
+    metadata:
+      labels:
+        helm.sh/chart: microservice-0.1.0
+        app.kubernetes.io/name: microservice
+        app.kubernetes.io/instance: test-release
+        app.kubernetes.io/version: "latest"
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/component: frontend
+    spec:
+      serviceAccountName: test-release-microservice-frontend
+      securityContext:
+        {}
+      containers:
+        - name: microservice
+          securityContext:
+            {}
+          image: "ghcr.io/liamawhite/microservice:latest"
+          imagePullPolicy: IfNotPresent
+          args:
+            - "-port=8080"
+            - "-service-name=frontend"
+            - "-timeout=30s"
+            - "-log-level=info"
+            - "-log-format=json"
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          resources:
+            limits:
+              cpu: 400m
+              memory: 512Mi
+            requests:
+              cpu: 200m
+              memory: 256Mi
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - podAffinityTerm:
+              labelSelector:
+                matchLabels:
+                  app.kubernetes.io/component: database
+              topologyKey: kubernetes.io/hostname
+            weight: 100---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: test-release-microservice-backend
+  labels:
+    helm.sh/chart: microservice-0.1.0
+    app.kubernetes.io/name: microservice
+    app.kubernetes.io/instance: test-release
+    app.kubernetes.io/version: "latest"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: microservice
+      app.kubernetes.io/instance: test-release
+      app.kubernetes.io/component: backend
+  template:
+    metadata:
+      labels:
+        helm.sh/chart: microservice-0.1.0
+        app.kubernetes.io/name: microservice
+        app.kubernetes.io/instance: test-release
+        app.kubernetes.io/version: "latest"
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/component: backend
+    spec:
+      serviceAccountName: test-release-microservice-backend
+      securityContext:
+        {}
+      containers:
+        - name: microservice
+          securityContext:
+            {}
+          image: "ghcr.io/liamawhite/microservice:latest"
+          imagePullPolicy: IfNotPresent
+          args:
+            - "-port=8081"
+            - "-service-name=backend"
+            - "-timeout=30s"
+            - "-log-level=info"
+            - "-log-format=json"
+          ports:
+            - name: http
+              containerPort: 8081
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          resources:
+            limits:
+              cpu: 400m
+              memory: 512Mi
+            requests:
+              cpu: 200m
+              memory: 256Mi
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - podAffinityTerm:
+              labelSelector:
+                matchLabels:
+                  app.kubernetes.io/component: database
+              topologyKey: kubernetes.io/hostname
+            weight: 100---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: test-release-microservice-database
+  labels:
+    helm.sh/chart: microservice-0.1.0
+    app.kubernetes.io/name: microservice
+    app.kubernetes.io/instance: test-release
+    app.kubernetes.io/version: "latest"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: database
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: microservice
+      app.kubernetes.io/instance: test-release
+      app.kubernetes.io/component: database
+  template:
+    metadata:
+      labels:
+        helm.sh/chart: microservice-0.1.0
+        app.kubernetes.io/name: microservice
+        app.kubernetes.io/instance: test-release
+        app.kubernetes.io/version: "latest"
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/component: database
+    spec:
+      serviceAccountName: test-release-microservice-database
+      securityContext:
+        {}
+      containers:
+        - name: microservice
+          securityContext:
+            {}
+          image: "ghcr.io/liamawhite/microservice:latest"
+          imagePullPolicy: IfNotPresent
+          args:
+            - "-port=8082"
+            - "-service-name=database"
+            - "-timeout=30s"
+            - "-log-level=info"
+            - "-log-format=json"
+          ports:
+            - name: http
+              containerPort: 8082
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          resources:
+            limits:
+              cpu: 400m
+              memory: 512Mi
+            requests:
+              cpu: 200m
+              memory: 256Mi
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - podAffinityTerm:
+              labelSelector:
+                matchLabels:
+                  app.kubernetes.io/component: database
+              topologyKey: kubernetes.io/hostname
+            weight: 100
+---
+# Source: microservice/templates/hpa.yaml
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: test-release-microservice-database
+  labels:
+    helm.sh/chart: microservice-0.1.0
+    app.kubernetes.io/name: microservice
+    app.kubernetes.io/instance: test-release
+    app.kubernetes.io/version: "latest"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: database
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: test-release-microservice-database
+  minReplicas: 2
+  maxReplicas: 5
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 60

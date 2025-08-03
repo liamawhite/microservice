@@ -19,6 +19,9 @@ jobs:
         with:
           nix_path: nixpkgs=channel:nixos-unstable
 
+      - name: generate
+        run: make gen
+
       - name: format
         run: make fmt
 

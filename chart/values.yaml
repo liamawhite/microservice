@@ -76,7 +76,7 @@ defaults:
     logFormat: "json"
 
 # Array of services to deploy - each can override defaults
-# See values-single.yaml and values-three-services.yaml for examples
+# See values-single.yaml and values-three-tier.yaml for examples
 services:
   - name: "microservice"
     # Uses all defaults - customize as needed

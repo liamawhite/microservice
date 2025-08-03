@@ -1,5 +1,4 @@
-{{- $effectiveServices := include "microservice.effectiveServices" . | fromYaml -}}
-{{- range $effectiveServices }}
+{{- range .Values.services }}
 {{- $service := . -}}
 {{- $serviceConfig := include "microservice.getServiceConfig" (dict "service" $service "root" $) | fromYaml -}}
 ---

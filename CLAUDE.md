@@ -85,24 +85,71 @@ The service includes a Helm chart for Kubernetes deployment located in the `char
 
 ### Installation
 
-The chart includes example values files for different deployment scenarios:
+The chart is published to GitHub Container Registry and can be installed directly from the OCI registry:
+
+#### Basic Installation
+```bash
+# Install latest version from OCI registry
+helm install my-microservice oci://ghcr.io/liamawhite/microservice
+
+# Install specific version
+helm install my-microservice oci://ghcr.io/liamawhite/microservice --version <version>
+```
 
 #### Single Service Deployment
 ```bash
-helm install my-microservice ./chart/ -f values-single.yaml
+helm install my-microservice oci://ghcr.io/liamawhite/microservice \
+  --set services[0].name=web \
+  --set services[0].port=8080
 ```
 
-#### Three Services Deployment
+#### Three-Tier Services Deployment
 ```bash
-helm install my-topology ./chart/ -f values-three-services.yaml
+helm install my-topology oci://ghcr.io/liamawhite/microservice \
+  --set services[0].name=frontend \
+  --set services[0].port=8080 \
+  --set services[1].name=backend \
+  --set services[1].port=8081 \
+  --set services[2].name=database \
+  --set services[2].port=8082
 ```
 
-#### Custom Configuration
+#### Custom Configuration with Values File
 ```bash
-# Create your own values file
-cp chart/values-single.yaml my-values.yaml
-# Edit my-values.yaml as needed
-helm install my-deployment ./chart/ -f my-values.yaml
+# Create custom values file
+cat > my-values.yaml << EOF
+defaults:
+  image:
+    tag: latest
+  resources:
+    requests:
+      memory: "64Mi"
+      cpu: "250m"
+    limits:
+      memory: "128Mi"
+      cpu: "500m"
+
+services:
+  - name: frontend
+    port: 8080
+  - name: backend
+    port: 8081
+    resources:
+      requests:
+        memory: "128Mi"
+      limits:
+        memory: "256Mi"
+EOF
+
+# Install with custom values
+helm install my-deployment oci://ghcr.io/liamawhite/microservice -f my-values.yaml
+```
+
+#### Local Development
+For local development and testing, you can still install from the local chart directory:
+```bash
+# Install from local chart (for development)
+helm install my-microservice ./chart/ -f my-values.yaml
 ```
 
 #### Example Values Files
@@ -112,10 +159,10 @@ helm install my-deployment ./chart/ -f my-values.yaml
 - Basic resource limits
 - Standard configuration
 
-**Three Services** (`values-three-services.yaml`):
-- Service A: Entry point (port 8080)
-- Service B: Middle service with enhanced resources (port 8081)
-- Service C: Final service with autoscaling and anti-affinity (port 8082)
+**Three-Tier Services** (`values-three-tier.yaml`):
+- Frontend: Entry point service (port 8080)
+- Backend: Application logic service with enhanced resources (port 8081)
+- Database: Data storage service with autoscaling and anti-affinity (port 8082)
 
 Both examples demonstrate the flexibility of the defaults/services structure.
 
@@ -135,15 +182,15 @@ Each service in the array creates:
 
 ### Testing Multi-Service Topologies
 
-With the multi-service deployment, you can test proxy chains:
+With the three-tier deployment, you can test proxy chains:
 
 ```bash
-# Chain through service-a -> service-b -> service-c
-kubectl port-forward service/my-topology-service-a 8080:8080
-curl http://localhost:8080/proxy/my-topology-service-b:8081/proxy/my-topology-service-c:8082
+# Chain through frontend -> backend -> database
+kubectl port-forward service/my-topology-frontend 8080:8080
+curl http://localhost:8080/proxy/my-topology-backend:8081/proxy/my-topology-database:8082
 
-# Direct access to service-b
-kubectl port-forward service/my-topology-service-b 8081:8081
+# Direct access to backend
+kubectl port-forward service/my-topology-backend 8081:8081
 curl http://localhost:8081/health
 ```
 

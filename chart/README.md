@@ -17,9 +17,9 @@ A Helm chart for deploying composable mock microservice topologies. This chart c
 helm install my-microservice ./chart/ -f values-single.yaml
 ```
 
-### Three Services Topology
+### Three-Tier Topology
 ```bash
-helm install my-topology ./chart/ -f values-three-services.yaml
+helm install my-topology ./chart/ -f values-three-tier.yaml
 ```
 
 ## Configuration
@@ -120,10 +120,10 @@ The chart includes pre-configured examples:
 - Resource limits configured
 - Health checks enabled
 
-### Three Services (`values-three-services.yaml`)
-- **Service A**: Entry point (port 8080)
-- **Service B**: Middle service with enhanced resources (port 8081)
-- **Service C**: Final service with autoscaling and anti-affinity (port 8082)
+### Three-Tier Services (`values-three-tier.yaml`)
+- **Frontend**: Entry point service (port 8080)
+- **Backend**: Application logic service with enhanced resources (port 8081)
+- **Database**: Data storage service with autoscaling and anti-affinity (port 8082)
 
 ## Usage Patterns
 

@@ -44,11 +44,15 @@ docker-build:
 		.
 
 # Check: format, lint, and tidy
-check: fmt lint tidy
+check: gen fmt lint tidy
 
-# Run all tests
+# Run all tests (including Helm template tests)
 test:
 	go test -v ./...
+
+# Generate/update golden files for Helm template tests
+gen:
+	UPDATE_GOLDEN=true go test -v ./tests/install
 
 # Run tests with coverage
 test-coverage:
@@ -77,5 +81,6 @@ help:
 	@echo "  make helm-push    - Package and push Helm chart to OCI registry"
 	@echo "  make check        - Run fmt, lint, and tidy"
 	@echo "  make test         - Run all tests"
+	@echo "  make gen          - Generate/update golden files for Helm template tests"
 	@echo "  make test-cov     - Run tests with coverage"
 	@echo "  make help         - Show this help message" 
