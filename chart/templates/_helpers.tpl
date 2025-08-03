@@ -85,7 +85,7 @@ app.kubernetes.io/component: {{ .service.name }}
 Get effective services list
 */}}
 {{- define "microservice.effectiveServices" -}}
-{{- .Values.services | toYaml -}}
+{{- .Values.services -}}
 {{- end }}
 
 {{/*
@@ -95,7 +95,7 @@ Get service config by merging defaults with service overrides
 {{- $service := .service -}}
 {{- $defaults := .root.Values.defaults -}}
 {{- $result := mergeOverwrite $defaults $service -}}
-{{- $result -}}
+{{- $result | toYaml -}}
 {{- end }}
 
 {{/*

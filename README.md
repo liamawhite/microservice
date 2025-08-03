@@ -85,9 +85,9 @@ Deploy a single service:
 helm install my-microservice ./chart/ -f chart/values-single.yaml
 ```
 
-Deploy a three-service topology:
+Deploy a three-tier topology:
 ```bash
-helm install my-topology ./chart/ -f chart/values-three-services.yaml
+helm install my-topology ./chart/ -f chart/values-three-tier.yaml
 ```
 
 ### Features

@@ -1,5 +1,5 @@
-# Three services deployment example
-# Usage: helm install my-topology ./chart/ -f values-three-services.yaml
+# Three-tier deployment example (frontend, backend, database)
+# Usage: helm install my-topology ./chart/ -f values-three-tier.yaml
 
 # Global chart configuration
 # nameOverride: Override chart name in resource names (e.g., "proxy" -> my-topology-proxy-service-a)
@@ -73,20 +73,22 @@ defaults:
     logLevel: "info"
     logFormat: "json"
 
-# Three services configuration
+# Three-tier services configuration
 services:
-  # Service A - Entry point service
-  - name: "service-a"
+  # Frontend - Entry point service (web tier)
+  - name: "frontend"
     config:
-      serviceName: "service-a"
+      serviceName: "frontend"
       port: 8080
     service:
       port: 8080
+    autoscaling:
+      enabled: false
     
-  # Service B - Middle service with more resources
-  - name: "service-b"
+  # Backend - Application logic service (app tier)
+  - name: "backend"
     config:
-      serviceName: "service-b"
+      serviceName: "backend"
       port: 8081
     service:
       port: 8081
@@ -97,11 +99,13 @@ services:
       limits:
         memory: "512Mi"
         cpu: "400m"
+    autoscaling:
+      enabled: false
     
-  # Service C - Final service with autoscaling enabled
-  - name: "service-c"
+  # Database - Data storage service (data tier)
+  - name: "database"
     config:
-      serviceName: "service-c"
+      serviceName: "database"
       port: 8082
     service:
       port: 8082
@@ -117,5 +121,5 @@ services:
           podAffinityTerm:
             labelSelector:
               matchLabels:
-                app.kubernetes.io/component: service-c
+                app.kubernetes.io/component: database
             topologyKey: kubernetes.io/hostname

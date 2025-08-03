@@ -1,0 +1,101 @@
+---
+# Source: microservice/templates/serviceaccount.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: test-release-microservice-microservice
+  labels:
+    helm.sh/chart: microservice-0.1.0
+    app.kubernetes.io/name: microservice
+    app.kubernetes.io/instance: test-release
+    app.kubernetes.io/version: "latest"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: microservice
+automountServiceAccountToken: true
+---
+# Source: microservice/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: test-release-microservice-microservice
+  labels:
+    helm.sh/chart: microservice-0.1.0
+    app.kubernetes.io/name: microservice
+    app.kubernetes.io/instance: test-release
+    app.kubernetes.io/version: "latest"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: microservice
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8080
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    app.kubernetes.io/name: microservice
+    app.kubernetes.io/instance: test-release
+    app.kubernetes.io/component: microservice
+---
+# Source: microservice/templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: test-release-microservice-microservice
+  labels:
+    helm.sh/chart: microservice-0.1.0
+    app.kubernetes.io/name: microservice
+    app.kubernetes.io/instance: test-release
+    app.kubernetes.io/version: "latest"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: microservice
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: microservice
+      app.kubernetes.io/instance: test-release
+      app.kubernetes.io/component: microservice
+  template:
+    metadata:
+      labels:
+        helm.sh/chart: microservice-0.1.0
+        app.kubernetes.io/name: microservice
+        app.kubernetes.io/instance: test-release
+        app.kubernetes.io/version: "latest"
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/component: microservice
+    spec:
+      serviceAccountName: test-release-microservice-microservice
+      securityContext:
+        {}
+      containers:
+        - name: microservice
+          securityContext:
+            {}
+          image: "ghcr.io/liamawhite/microservice:latest"
+          imagePullPolicy: IfNotPresent
+          args:
+            - "-port=8080"
+            - "-service-name=microservice"
+            - "-timeout=30s"
+            - "-log-level=info"
+            - "-log-format=json"
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          resources:
+            {}
