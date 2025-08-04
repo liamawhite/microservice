@@ -1,4 +1,10 @@
 ---
+# Source: microservice/templates/namespace.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: microservices
+---
 # Source: microservice/templates/serviceaccount.yaml
 apiVersion: v1
 kind: ServiceAccount

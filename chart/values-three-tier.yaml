@@ -10,7 +10,9 @@ fullnameOverride: ""
 imagePullSecrets: []
 
 # Deploy to microservice namespace
-namespace: "microservices"
+namespace:
+  create: true
+  name: "microservices"
 
 # Default values for all services
 defaults:
