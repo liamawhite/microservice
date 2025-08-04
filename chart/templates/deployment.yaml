@@ -9,31 +9,20 @@ metadata:
   labels:
     {{- include "microservice.serviceLabels" (dict "service" $service "root" $) | nindent 4 }}
 spec:
-  {{- if not $serviceConfig.autoscaling.enabled }}
   replicas: {{ $serviceConfig.replicaCount }}
-  {{- end }}
   selector:
     matchLabels:
       {{- include "microservice.serviceSelectorLabels" (dict "service" $service "root" $) | nindent 6 }}
   template:
     metadata:
-      {{- with $serviceConfig.podAnnotations }}
-      annotations:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
       labels:
         {{- include "microservice.serviceLabels" (dict "service" $service "root" $) | nindent 8 }}
-        {{- with $serviceConfig.podLabels }}
-        {{- toYaml . | nindent 8 }}
-        {{- end }}
     spec:
       {{- with (coalesce $.Values.imagePullSecrets $serviceConfig.imagePullSecrets) }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       serviceAccountName: {{ include "microservice.serviceAccountNameForService" (dict "service" $service "root" $) }}
-      securityContext:
-        {{- toYaml $serviceConfig.podSecurityContext | nindent 8 }}
       containers:
         - name: {{ $.Chart.Name }}
           securityContext:
@@ -56,16 +45,5 @@ spec:
             {{- toYaml $serviceConfig.readinessProbe | nindent 12 }}
           resources:
             {{- toYaml $serviceConfig.resources | nindent 12 }}
-      {{- with $serviceConfig.nodeSelector }}
-      nodeSelector:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
-      {{- with $serviceConfig.affinity }}
-      affinity:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
-      {{- with $serviceConfig.tolerations }}
-      tolerations:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
+---
 {{- end }}

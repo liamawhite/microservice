@@ -11,7 +11,10 @@ metadata:
     app.kubernetes.io/version: "latest"
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/component: frontend
-automountServiceAccountToken: true---
+automountServiceAccountToken: true
+---
+# Source: microservice/templates/serviceaccount.yaml
+---
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -23,7 +26,10 @@ metadata:
     app.kubernetes.io/version: "latest"
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/component: backend
-automountServiceAccountToken: true---
+automountServiceAccountToken: true
+---
+# Source: microservice/templates/serviceaccount.yaml
+---
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -59,7 +65,10 @@ spec:
   selector:
     app.kubernetes.io/name: microservice
     app.kubernetes.io/instance: test-release
-    app.kubernetes.io/component: frontend---
+    app.kubernetes.io/component: frontend
+---
+# Source: microservice/templates/service.yaml
+---
 apiVersion: v1
 kind: Service
 metadata:
@@ -81,7 +90,10 @@ spec:
   selector:
     app.kubernetes.io/name: microservice
     app.kubernetes.io/instance: test-release
-    app.kubernetes.io/component: backend---
+    app.kubernetes.io/component: backend
+---
+# Source: microservice/templates/service.yaml
+---
 apiVersion: v1
 kind: Service
 metadata:
@@ -135,8 +147,6 @@ spec:
         app.kubernetes.io/component: frontend
     spec:
       serviceAccountName: test-release-microservice-frontend
-      securityContext:
-        {}
       containers:
         - name: microservice
           securityContext:
@@ -172,15 +182,9 @@ spec:
             requests:
               cpu: 200m
               memory: 256Mi
-      affinity:
-        podAntiAffinity:
-          preferredDuringSchedulingIgnoredDuringExecution:
-          - podAffinityTerm:
-              labelSelector:
-                matchLabels:
-                  app.kubernetes.io/component: database
-              topologyKey: kubernetes.io/hostname
-            weight: 100---
+---
+# Source: microservice/templates/deployment.yaml
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -210,8 +214,6 @@ spec:
         app.kubernetes.io/component: backend
     spec:
       serviceAccountName: test-release-microservice-backend
-      securityContext:
-        {}
       containers:
         - name: microservice
           securityContext:
@@ -247,15 +249,9 @@ spec:
             requests:
               cpu: 200m
               memory: 256Mi
-      affinity:
-        podAntiAffinity:
-          preferredDuringSchedulingIgnoredDuringExecution:
-          - podAffinityTerm:
-              labelSelector:
-                matchLabels:
-                  app.kubernetes.io/component: database
-              topologyKey: kubernetes.io/hostname
-            weight: 100---
+---
+# Source: microservice/templates/deployment.yaml
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -268,6 +264,7 @@ metadata:
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/component: database
 spec:
+  replicas: 1
   selector:
     matchLabels:
       app.kubernetes.io/name: microservice
@@ -284,8 +281,6 @@ spec:
         app.kubernetes.io/component: database
     spec:
       serviceAccountName: test-release-microservice-database
-      securityContext:
-        {}
       containers:
         - name: microservice
           securityContext:
@@ -321,39 +316,3 @@ spec:
             requests:
               cpu: 200m
               memory: 256Mi
-      affinity:
-        podAntiAffinity:
-          preferredDuringSchedulingIgnoredDuringExecution:
-          - podAffinityTerm:
-              labelSelector:
-                matchLabels:
-                  app.kubernetes.io/component: database
-              topologyKey: kubernetes.io/hostname
-            weight: 100
----
-# Source: microservice/templates/hpa.yaml
-apiVersion: autoscaling/v2
-kind: HorizontalPodAutoscaler
-metadata:
-  name: test-release-microservice-database
-  labels:
-    helm.sh/chart: microservice-0.1.0
-    app.kubernetes.io/name: microservice
-    app.kubernetes.io/instance: test-release
-    app.kubernetes.io/version: "latest"
-    app.kubernetes.io/managed-by: Helm
-    app.kubernetes.io/component: database
-spec:
-  scaleTargetRef:
-    apiVersion: apps/v1
-    kind: Deployment
-    name: test-release-microservice-database
-  minReplicas: 2
-  maxReplicas: 5
-  metrics:
-    - type: Resource
-      resource:
-        name: cpu
-        target:
-          type: Utilization
-          averageUtilization: 60

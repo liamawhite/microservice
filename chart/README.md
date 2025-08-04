@@ -109,7 +109,6 @@ Each service in the `services` array can override any default parameter:
 | `service.*` | Override Kubernetes service settings |
 | `resources.*` | Override resource requests/limits |
 | `autoscaling.*` | Override autoscaling configuration |
-| `affinity.*` | Override pod affinity rules |
 
 ## Example Values Files
 
@@ -123,7 +122,7 @@ The chart includes pre-configured examples:
 ### Three-Tier Services (`values-three-tier.yaml`)
 - **Frontend**: Entry point service (port 8080)
 - **Backend**: Application logic service with enhanced resources (port 8081)
-- **Database**: Data storage service with autoscaling and anti-affinity (port 8082)
+- **Database**: Data storage service with autoscaling (port 8082)
 
 ## Usage Patterns
 

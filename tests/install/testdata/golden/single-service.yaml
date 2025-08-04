@@ -67,8 +67,6 @@ spec:
         app.kubernetes.io/component: microservice
     spec:
       serviceAccountName: test-release-microservice-microservice
-      securityContext:
-        {}
       containers:
         - name: microservice
           securityContext:
