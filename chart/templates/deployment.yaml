@@ -6,6 +6,9 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: {{ include "microservice.serviceName" (dict "service" $service "root" $) }}
+  {{- with $.Values.namespace }}
+  namespace: {{ . }}
+  {{- end }}
   labels:
     {{- include "microservice.serviceLabels" (dict "service" $service "root" $) | nindent 4 }}
 spec:
