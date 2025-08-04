@@ -52,7 +52,7 @@ test:
 
 # Generate/update golden files for Helm template tests
 gen:
-	UPDATE_GOLDEN=true go test -v ./tests/install
+	UPDATE_GOLDEN=true go test -v -count=1 ./tests/install
 
 # Run tests with coverage
 test-coverage:

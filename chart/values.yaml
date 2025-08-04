@@ -15,6 +15,10 @@ fullnameOverride: ""
 # imagePullSecrets: Secrets for pulling images from private registries
 imagePullSecrets: []
 
+# namespace: Target namespace for all resources
+# If not specified, resources will be deployed to the current namespace context
+namespace: ""
+
 defaults:
   replicaCount: 1
 

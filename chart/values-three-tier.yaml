@@ -9,6 +9,9 @@ fullnameOverride: ""
 # imagePullSecrets: Secrets for private registries  
 imagePullSecrets: []
 
+# Deploy to microservice namespace
+namespace: "microservices"
+
 # Default values for all services
 defaults:
   replicaCount: 1

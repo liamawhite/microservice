@@ -4,6 +4,7 @@ apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: test-release-microservice-frontend
+  namespace: microservices
   labels:
     helm.sh/chart: microservice-0.1.0
     app.kubernetes.io/name: microservice
@@ -19,6 +20,7 @@ apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: test-release-microservice-backend
+  namespace: microservices
   labels:
     helm.sh/chart: microservice-0.1.0
     app.kubernetes.io/name: microservice
@@ -34,6 +36,7 @@ apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: test-release-microservice-database
+  namespace: microservices
   labels:
     helm.sh/chart: microservice-0.1.0
     app.kubernetes.io/name: microservice
@@ -48,6 +51,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: test-release-microservice-frontend
+  namespace: microservices
   labels:
     helm.sh/chart: microservice-0.1.0
     app.kubernetes.io/name: microservice
@@ -73,6 +77,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: test-release-microservice-backend
+  namespace: microservices
   labels:
     helm.sh/chart: microservice-0.1.0
     app.kubernetes.io/name: microservice
@@ -98,6 +103,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: test-release-microservice-database
+  namespace: microservices
   labels:
     helm.sh/chart: microservice-0.1.0
     app.kubernetes.io/name: microservice
@@ -122,6 +128,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: test-release-microservice-frontend
+  namespace: microservices
   labels:
     helm.sh/chart: microservice-0.1.0
     app.kubernetes.io/name: microservice
@@ -189,6 +196,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: test-release-microservice-backend
+  namespace: microservices
   labels:
     helm.sh/chart: microservice-0.1.0
     app.kubernetes.io/name: microservice
@@ -256,6 +264,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: test-release-microservice-database
+  namespace: microservices
   labels:
     helm.sh/chart: microservice-0.1.0
     app.kubernetes.io/name: microservice
