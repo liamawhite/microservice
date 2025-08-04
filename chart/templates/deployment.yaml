@@ -6,7 +6,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: {{ include "microservice.serviceName" (dict "service" $service "root" $) }}
-  {{- with $.Values.namespace }}
+  {{- with $.Values.namespace.name }}
   namespace: {{ . }}
   {{- end }}
   labels:

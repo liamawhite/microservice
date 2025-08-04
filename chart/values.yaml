@@ -17,7 +17,16 @@ imagePullSecrets: []
 
 # namespace: Target namespace for all resources
 # If not specified, resources will be deployed to the current namespace context
-namespace: ""
+namespace:
+  # create: Whether to create the namespace
+  create: false
+  # name: Target namespace for all resources
+  # If not specified, resources will be deployed to the current namespace context
+  name: ""
+  # labels: Labels to apply to the created namespace
+  labels: {}
+  # annotations: Annotations to apply to the created namespace
+  annotations: {}
 
 defaults:
   replicaCount: 1
