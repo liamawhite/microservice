@@ -17,4 +17,5 @@ spec:
       name: http
   selector:
     {{- include "microservice.serviceSelectorLabels" (dict "service" $service "root" $) | nindent 4 }}
+---
 {{- end }}
