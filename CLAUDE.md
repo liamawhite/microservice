@@ -39,6 +39,108 @@ The Makefile automatically uses the Nix shell via `SHELL := nix develop --comman
 }
 ```
 
+## Fault Injection
+
+The service supports fault injection to simulate service failures and test retry logic in service meshes like Istio/Envoy.
+
+### Fault Injection Path Format
+
+Fault injection uses the `/fault/` prefix with the following formats:
+
+- `/fault/<status-code>` - Always inject the specified error (100% chance)
+- `/fault/<status-code>/<percentage>` - Inject error with specified probability
+- `/fault/<status-code>/<percentage>/proxy/...` - Chain with proxy segments
+
+**Status Codes**: Only error codes (400-599) are allowed.
+
+### Fault Injection Behavior
+
+When a fault injection segment is encountered:
+
+1. **Random Check**: Generate a random number to determine if fault should trigger based on percentage
+2. **If Fault Triggers**: Return error response immediately and terminate the request chain
+3. **If Fault Doesn't Trigger**: Continue processing the remaining path segments
+
+This behavior enables retry testing - some requests fail while others succeed on retry.
+
+### Examples
+
+#### Basic Fault Injection
+
+```bash
+# Always return 500 Internal Server Error
+curl http://localhost:8080/fault/500
+
+# Always return 404 Not Found
+curl http://localhost:8080/fault/404
+```
+
+Response:
+```json
+{
+  "status": 500,
+  "service": "service-name",
+  "message": "Fault injected: 500 Internal Server Error"
+}
+```
+
+#### Percentage-Based Fault Injection
+
+```bash
+# Return 503 error 30% of the time, success 70% of the time
+curl http://localhost:8080/fault/503/30
+
+# Never trigger fault (0% chance) - always succeed
+curl http://localhost:8080/fault/500/0
+
+# Always trigger fault (100% chance)
+curl http://localhost:8080/fault/502/100
+```
+
+#### Fault Injection with Proxy Chains
+
+```bash
+# Inject 500 error 50% of the time, otherwise forward to service-b
+# This simulates intermittent service failures
+curl http://localhost:8080/fault/500/50/proxy/service-b:8080
+
+# Chain through multiple services with fault injection
+# If fault triggers, request terminates before reaching service-b
+curl http://localhost:8080/fault/502/30/proxy/service-b:8080/proxy/service-c:9080
+```
+
+### Use Cases
+
+**Service Mesh Retry Testing**: Test Istio/Envoy retry policies by injecting faults with a percentage. Some requests fail and trigger retries, while others succeed.
+
+```bash
+# With Istio retry policy configured, this tests automatic retries
+# 40% of requests fail initially but may succeed on retry
+curl http://localhost:8080/fault/503/40/proxy/backend:8080
+```
+
+**Circuit Breaker Testing**: Inject high error rates to trigger circuit breakers.
+
+```bash
+# Inject 90% error rate to test circuit breaker thresholds
+curl http://localhost:8080/fault/500/90/proxy/backend:8080
+```
+
+**Timeout Testing**: Combine fault injection with timeouts to test timeout handling.
+
+```bash
+# Service configured with 30s timeout
+# Inject errors to test timeout behavior
+curl http://localhost:8080/fault/504/100
+```
+
+### Implementation Details
+
+- **Path Parsing**: `parsePath()` function in `internal/proxy/handler.go:53-150` handles fault injection paths
+- **Random Generation**: Uses `math/rand.Intn(100)` to determine if fault triggers based on percentage
+- **Response Handler**: `sendFaultResponse()` function in `internal/proxy/handler.go:252-278` generates fault responses
+- **Execution Logic**: `ServeHTTP()` function in `internal/proxy/handler.go:175-222` contains fault injection logic
+
 ## Common Commands
 
 ### Development
