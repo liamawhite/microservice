@@ -4,7 +4,7 @@ A Go-based HTTP proxy service that creates composable mock microservice topologi
 
 ## What it does
 
-This service acts as an HTTP proxy that can chain requests through multiple services, allowing you to simulate complex microservice architectures. Each service can forward requests to other services in the chain, making it perfect for testing distributed system behaviors.
+This service acts as an HTTP proxy that can chain requests through multiple services, allowing you to simulate complex microservice architectures. Each service can forward requests to other services in the chain, and inject configurable faults to test resilience and retry logic. Perfect for testing distributed system behaviors in development and CI/CD pipelines.
 
 ## Usage
 
@@ -26,11 +26,55 @@ curl http://localhost:8080/proxy/service-b:8080/proxy/service-c:80
 curl http://localhost:8080/proxy/service-b:8080
 ```
 
+### Fault injection
+
+Simulate service failures and test retry logic using the `/fault/` path format:
+
+```bash
+# Always return 500 Internal Server Error
+curl http://localhost:8080/fault/500
+
+# Return 503 error 30% of the time (for testing retries)
+curl http://localhost:8080/fault/503/30
+
+# Inject faults in a proxy chain
+# 50% chance of 500 error, otherwise forward to service-b
+curl http://localhost:8080/fault/500/50/proxy/service-b:8080
+```
+
+**Path formats:**
+- `/fault/<status-code>` - Always inject error (100% chance)
+- `/fault/<status-code>/<percentage>` - Inject error with specified probability (0-100)
+- `/fault/<status-code>/<percentage>/proxy/...` - Chain with proxy segments
+
+**Supported status codes:** 400-599 (client and server errors)
+
+**Use cases:**
+- **Retry testing**: Test Istio/Envoy retry policies with percentage-based faults
+- **Circuit breaker testing**: Inject high error rates to trigger circuit breakers
+- **Resilience testing**: Validate application behavior under intermittent failures
+
+**Example response:**
+```json
+{
+  "status": 500,
+  "service": "service-name",
+  "message": "Fault injected: 500 Internal Server Error"
+}
+```
+
 ### How it works
 
+**Proxy chains:**
 1. Parse the path to extract the next service (`service-b:8080`)
 2. Forward the request with the remaining path (`/proxy/service-c:80`)
 3. Return the final response when no more proxy segments exist
+
+**Fault injection:**
+1. Parse the path to extract status code and percentage
+2. Generate random number to determine if fault should trigger
+3. If triggered: return error response immediately
+4. If not triggered: continue to next segment or return success
 
 ### Health check
 
@@ -108,6 +152,9 @@ kubectl port-forward service/my-topology-service-a 8080:8080
 
 # Chain through multiple services
 curl http://localhost:8080/proxy/my-topology-service-b:8081/proxy/my-topology-service-c:8082
+
+# Test fault injection (50% error rate)
+curl http://localhost:8080/fault/503/50/proxy/my-topology-service-b:8081
 
 # Check individual service health
 kubectl port-forward service/my-topology-service-b 8081:8081

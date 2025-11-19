@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math/rand"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -40,13 +42,20 @@ func NewHandler(timeout time.Duration, serviceName string, logger *slog.Logger) 
 
 // actions represents the parsed proxy path actions
 type actions struct {
-	NextHop   string // The next hop service and port to forward to
-	Remaining string // The remaining path after next hop
-	IsLastHop bool   // Whether this is the last hop in the chain
+	NextHop         string // The next hop service and port to forward to
+	Remaining       string // The remaining path after next hop
+	IsLastHop       bool   // Whether this is the last hop in the chain
+	IsFault         bool   // Whether this is a fault injection
+	FaultCode       int    // HTTP status code to inject (400-599)
+	FaultPercentage int    // Percentage chance of fault triggering (0-100)
 }
 
 // parsePath validates and parses the proxy path into actions
 // Returns the actions to take and any error
+// Supports both /proxy/ and /fault/ segments:
+// - /proxy/service:port - forward to next service
+// - /fault/500 - always inject 500 error
+// - /fault/500/30 - inject 500 error 30% of the time
 func parsePath(path string) (actions, error) {
 	if path == "" || path == "/" {
 		return actions{
@@ -61,9 +70,62 @@ func parsePath(path string) (actions, error) {
 		return actions{}, fmt.Errorf("invalid path: missing service")
 	}
 
+	// Check if this is a fault injection path
+	if strings.HasPrefix(path, "/fault/") {
+		if len(parts) < 3 {
+			return actions{}, fmt.Errorf("invalid fault path: must be /fault/<code> or /fault/<code>/<percentage>")
+		}
+
+		// Parse status code
+		statusCode, err := strconv.Atoi(parts[2])
+		if err != nil {
+			return actions{}, fmt.Errorf("invalid fault code: must be a number")
+		}
+
+		// Validate status code is 400-599
+		if statusCode < 400 || statusCode > 599 {
+			return actions{}, fmt.Errorf("invalid fault code: must be 400-599")
+		}
+
+		// Default percentage to 100
+		percentage := 100
+
+		// Check if percentage is provided
+		startIdx := 3
+		if len(parts) > 3 && parts[3] != "" {
+			// Try to parse as percentage
+			if p, err := strconv.Atoi(parts[3]); err == nil {
+				percentage = p
+				startIdx = 4
+			}
+		}
+
+		// Validate percentage is 0-100
+		if percentage < 0 || percentage > 100 {
+			return actions{}, fmt.Errorf("invalid fault percentage: must be 0-100")
+		}
+
+		// Get remaining path
+		var remaining string
+		if len(parts) > startIdx {
+			remaining = "/" + strings.Join(parts[startIdx:], "/")
+		} else {
+			remaining = "/"
+		}
+
+		return actions{
+			NextHop:         "",
+			Remaining:       remaining,
+			IsLastHop:       false,
+			IsFault:         true,
+			FaultCode:       statusCode,
+			FaultPercentage: percentage,
+		}, nil
+	}
+
 	// Path must start with /proxy/
 	if !strings.HasPrefix(path, "/proxy/") {
-		return actions{}, fmt.Errorf("invalid path: must start with /proxy/")
+		return actions{}, fmt.Errorf("invalid path: must start with /proxy/ or /fault/")
 	}
 
 	// Get the first service
@@ -109,6 +171,55 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Create context with timeout
 	ctx, cancel := context.WithTimeout(r.Context(), h.timeout)
 	defer cancel()
+
+	// Handle fault injection
+	if actions.IsFault {
+		logger.Info("Fault injection detected", slog.Int("fault_code", actions.FaultCode), slog.Int("percentage", actions.FaultPercentage))
+
+		// Determine if fault should trigger based on percentage
+		shouldTrigger := rand.Intn(100) < actions.FaultPercentage
+
+		if shouldTrigger {
+			logger.Info("Fault triggered", slog.Int("fault_code", actions.FaultCode))
+
+			if err := h.sendFaultResponse(w, actions.FaultCode, logger); err != nil {
+				logger.Error("Failed to send fault response", slog.String("error", err.Error()))
+				http.Error(w, fmt.Sprintf("Response error: %v", err), http.StatusInternalServerError)
+				return
+			}
+
+			duration := time.Since(startTime)
+			logger.Info("Fault injection completed", slog.Duration("duration", duration), slog.Int("status_code", actions.FaultCode))
+			return
+		}
+
+		logger.Info("Fault not triggered, continuing to next segment", slog.String("remaining", actions.Remaining))
+
+		// Fault didn't trigger, continue processing remaining path
+		// If there's a remaining path, process it recursively
+		if actions.Remaining != "/" {
+			// Parse and process the remaining path
+			nextActions, err := parsePath(actions.Remaining)
+			if err != nil {
+				logger.Error("Failed to parse remaining path", slog.String("error", err.Error()))
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			actions = nextActions
+			logger.Debug("Continuing with remaining path", slog.String("next_hop", actions.NextHop), slog.String("remaining", actions.Remaining))
+		} else {
+			// No remaining path, return success
+			logger.Info("No remaining path, returning success")
+			if err := h.sendFinalResponse(w, http.StatusOK, logger); err != nil {
+				logger.Error("Failed to send final response", slog.String("error", err.Error()))
+				http.Error(w, fmt.Sprintf("Response error: %v", err), http.StatusInternalServerError)
+				return
+			}
+			duration := time.Since(startTime)
+			logger.Info("Request completed", slog.Duration("duration", duration), slog.Int("status_code", http.StatusOK))
+			return
+		}
+	}
 
 	// If this is the last hop, we're done
 	if actions.IsLastHop {
@@ -184,6 +295,34 @@ func (h *Handler) sendFinalResponse(w http.ResponseWriter, statusCode int, logge
 	}
 
 	logger.Debug("Final response sent successfully")
+	return nil
+}
+
+// sendFaultResponse creates and sends a fault injection response
+func (h *Handler) sendFaultResponse(w http.ResponseWriter, statusCode int, logger *slog.Logger) error {
+	logger.Debug("Sending fault response", slog.Int("status_code", statusCode), slog.String("service", h.serviceName))
+
+	// Get standard HTTP status text
+	statusText := http.StatusText(statusCode)
+	if statusText == "" {
+		statusText = "Unknown Error"
+	}
+
+	response := Response{
+		Status:  statusCode,
+		Service: h.serviceName,
+		Message: fmt.Sprintf("Fault injected: %d %s", statusCode, statusText),
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(statusCode)
+
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		logger.Error("Failed to encode JSON fault response", slog.String("error", err.Error()))
+		return err
+	}
+
+	logger.Debug("Fault response sent successfully")
 	return nil
 }
 
