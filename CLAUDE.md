@@ -298,13 +298,44 @@ curl http://localhost:8081/health
 
 ## Configuration
 
-### Service Configuration
-- **Port**: `-port` flag (default: 8080)
-- **Timeout**: `-timeout` flag (default: 30s)
-- **Service Name**: `-service-name` flag (default: "proxy")
-- **Log Level**: `-log-level` flag (debug, info, warn, error)
-- **Log Format**: `-log-format` flag (json, text)
-- **Header Logging**: `-log-headers` flag (default: false) - Log all request and response headers with sensitive header redaction
+### Command-Line Interface
+
+The service uses [Cobra](https://github.com/spf13/cobra) for CLI argument parsing. The `serve` command starts the HTTP server and accepts the following flags:
+
+| Flag | Short | Type | Default | Description |
+|------|-------|------|---------|-------------|
+| `--port` | `-p` | int | 8080 | HTTP server port |
+| `--timeout` | `-t` | duration | 30s | Request timeout |
+| `--service-name` | `-s` | string | "proxy" | Service identifier in responses |
+| `--log-level` | `-l` | string | "info" | Log level (debug, info, warn, error) |
+| `--log-format` | `-f` | string | "json" | Log output format (json, text) |
+| `--log-headers` | | bool | false | Log all request and response headers with sensitive data redaction |
+
+### Usage Examples
+
+```bash
+# Using long flags
+./microservice serve --port 8080 --service-name my-service --log-level debug
+
+# Using short flags (recommended for brevity)
+./microservice serve -p 8080 -s my-service -l debug
+
+# Get help
+./microservice serve --help
+
+# Show version
+./microservice --version
+```
+
+### Input Validation
+
+The CLI validates all inputs before starting the server:
+- **Port**: Must be between 1-65535
+- **Timeout**: Must be positive (or zero for no timeout)
+- **Log Level**: Must be one of: debug, info, warn, error
+- **Log Format**: Must be one of: json, text
+
+Invalid inputs will display a helpful error message and exit with code 1.
 
 ### Health Check
 All services expose `/health` endpoint returning:

@@ -71,9 +71,10 @@ func createServices(t *testing.T, ctx context.Context, nw *testcontainers.Docker
 					WithPort(nat.Port(exposedPort)).
 					WithStartupTimeout(30 * time.Second),
 				Cmd: []string{
-					fmt.Sprintf("-port=%s", config.Port),
-					fmt.Sprintf("-service-name=%s", config.Name),
-					"-log-format=text",
+					"serve",
+					fmt.Sprintf("--port=%s", config.Port),
+					fmt.Sprintf("--service-name=%s", config.Name),
+					"--log-format=text",
 				},
 			}
 
