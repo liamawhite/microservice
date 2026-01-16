@@ -38,6 +38,7 @@ spec:
             - "-timeout={{ $serviceConfig.config.timeout }}"
             - "-log-level={{ $serviceConfig.config.logLevel }}"
             - "-log-format={{ $serviceConfig.config.logFormat }}"
+            - "-log-headers={{ $serviceConfig.config.logHeaders }}"
           ports:
             - name: http
               containerPort: {{ $serviceConfig.config.port }}

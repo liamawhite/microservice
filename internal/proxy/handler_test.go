@@ -358,3 +358,168 @@ func createTestLogger() *slog.Logger {
 	handler := slog.NewTextHandler(os.Stderr, opts)
 	return slog.New(handler).With(slog.String("test", "true"))
 }
+
+func TestHeaderLogging(t *testing.T) {
+	logger := createTestLogger()
+
+	tests := []struct {
+		name                string
+		logHeaders          bool
+		inputHeaders        http.Header
+		expectedInGroup     bool
+		expectedHeaderCount int
+	}{
+		{
+			name:       "headers disabled - empty group",
+			logHeaders: false,
+			inputHeaders: http.Header{
+				"X-Custom-Header": []string{"value1"},
+				"Content-Type":    []string{"application/json"},
+			},
+			expectedInGroup:     false,
+			expectedHeaderCount: 0,
+		},
+		{
+			name:       "headers enabled - all headers logged",
+			logHeaders: true,
+			inputHeaders: http.Header{
+				"X-Custom-Header": []string{"value1"},
+				"Content-Type":    []string{"application/json"},
+			},
+			expectedInGroup:     true,
+			expectedHeaderCount: 2,
+		},
+		{
+			name:                "headers enabled - empty headers",
+			logHeaders:          true,
+			inputHeaders:        http.Header{},
+			expectedInGroup:     false,
+			expectedHeaderCount: 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			handler := NewHandler(30*time.Second, "test-service", logger, WithHeaderLogging(tt.logHeaders))
+
+			// Test the headersToLogAttrs method
+			attr := handler.headersToLogAttrs(tt.inputHeaders, "test_headers")
+
+			// Verify the attribute is a group
+			assert.Equal(t, "test_headers", attr.Key)
+
+			// If we expect headers in the group, verify count
+			if tt.expectedInGroup {
+				group := attr.Value.Group()
+				assert.Equal(t, tt.expectedHeaderCount, len(group), "Header count mismatch")
+			}
+		})
+	}
+}
+
+func TestHeaderRedaction(t *testing.T) {
+	logger := createTestLogger()
+	handler := NewHandler(30*time.Second, "test-service", logger, WithHeaderLogging(true))
+
+	tests := []struct {
+		name         string
+		headerName   string
+		headerValue  string
+		shouldRedact bool
+	}{
+		{
+			name:         "Authorization header - should redact",
+			headerName:   "Authorization",
+			headerValue:  "Bearer secret123",
+			shouldRedact: true,
+		},
+		{
+			name:         "Cookie header - should redact",
+			headerName:   "Cookie",
+			headerValue:  "session=abc123",
+			shouldRedact: true,
+		},
+		{
+			name:         "Set-Cookie header - should redact",
+			headerName:   "Set-Cookie",
+			headerValue:  "session=abc123",
+			shouldRedact: true,
+		},
+		{
+			name:         "X-Api-Key header - should redact",
+			headerName:   "X-Api-Key",
+			headerValue:  "secret-api-key",
+			shouldRedact: true,
+		},
+		{
+			name:         "X-Custom-Header - should not redact",
+			headerName:   "X-Custom-Header",
+			headerValue:  "custom-value",
+			shouldRedact: false,
+		},
+		{
+			name:         "Content-Type - should not redact",
+			headerName:   "Content-Type",
+			headerValue:  "application/json",
+			shouldRedact: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			headers := http.Header{
+				tt.headerName: []string{tt.headerValue},
+			}
+
+			attr := handler.headersToLogAttrs(headers, "test_headers")
+			group := attr.Value.Group()
+
+			require.Len(t, group, 1, "Should have exactly one header")
+
+			headerAttr := group[0]
+			assert.Equal(t, tt.headerName, headerAttr.Key)
+
+			if tt.shouldRedact {
+				assert.Equal(t, "[REDACTED]", headerAttr.Value.String())
+			} else {
+				assert.Equal(t, tt.headerValue, headerAttr.Value.String())
+			}
+		})
+	}
+}
+
+func TestWithHeaderLogging(t *testing.T) {
+	logger := createTestLogger()
+
+	tests := []struct {
+		name        string
+		enabled     bool
+		wantEnabled bool
+	}{
+		{
+			name:        "header logging enabled",
+			enabled:     true,
+			wantEnabled: true,
+		},
+		{
+			name:        "header logging disabled",
+			enabled:     false,
+			wantEnabled: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			handler := NewHandler(30*time.Second, "test-service", logger, WithHeaderLogging(tt.enabled))
+			assert.Equal(t, tt.wantEnabled, handler.logHeaders)
+		})
+	}
+}
+
+func TestDefaultHeaderLogging(t *testing.T) {
+	logger := createTestLogger()
+
+	// Handler created without WithHeaderLogging option should have logHeaders=false by default
+	handler := NewHandler(30*time.Second, "test-service", logger)
+	assert.False(t, handler.logHeaders, "Default logHeaders should be false")
+}
