@@ -75,6 +75,7 @@ defaults:
     timeout: "30s"
     logLevel: "info"
     logFormat: "json"
+    logHeaders: false
 
 # Array of services to deploy - each can override defaults
 # See values-single.yaml and values-three-tier.yaml for examples

@@ -19,6 +19,7 @@ type Handler struct {
 	timeout     time.Duration
 	serviceName string
 	logger      *slog.Logger
+	logHeaders  bool
 }
 
 // Response represents the standard response format
@@ -28,16 +29,34 @@ type Response struct {
 	Message string `json:"message,omitempty"`
 }
 
+// HandlerOption configures a Handler
+type HandlerOption func(*Handler)
+
+// WithHeaderLogging enables or disables request/response header logging
+func WithHeaderLogging(enabled bool) HandlerOption {
+	return func(h *Handler) {
+		h.logHeaders = enabled
+	}
+}
+
 // NewHandler creates a new proxy handler with structured logging
-func NewHandler(timeout time.Duration, serviceName string, logger *slog.Logger) *Handler {
-	return &Handler{
+func NewHandler(timeout time.Duration, serviceName string, logger *slog.Logger, opts ...HandlerOption) *Handler {
+	h := &Handler{
 		client: &http.Client{
 			Timeout: timeout,
 		},
 		timeout:     timeout,
 		serviceName: serviceName,
 		logger:      logger,
+		logHeaders:  false, // default to false
 	}
+
+	// Apply options
+	for _, opt := range opts {
+		opt(h)
+	}
+
+	return h
 }
 
 // actions represents the parsed proxy path actions
@@ -48,6 +67,37 @@ type actions struct {
 	IsFault         bool   // Whether this is a fault injection
 	FaultCode       int    // HTTP status code to inject (400-599)
 	FaultPercentage int    // Percentage chance of fault triggering (0-100)
+}
+
+// sensitiveHeaders lists headers that should be redacted in logs for security
+var sensitiveHeaders = map[string]bool{
+	"authorization":       true,
+	"cookie":              true,
+	"set-cookie":          true,
+	"proxy-authorization": true,
+	"x-api-key":           true,
+	"x-auth-token":        true,
+}
+
+// headersToLogAttrs converts HTTP headers to slog.Attr with sensitive header redaction
+func (h *Handler) headersToLogAttrs(headers http.Header, prefix string) slog.Attr {
+	if !h.logHeaders || len(headers) == 0 {
+		return slog.Group(prefix) // Empty group if logging disabled
+	}
+
+	attrs := make([]any, 0, len(headers))
+	for key, values := range headers {
+		lowerKey := strings.ToLower(key)
+		value := strings.Join(values, ", ")
+
+		if sensitiveHeaders[lowerKey] {
+			value = "[REDACTED]"
+		}
+
+		attrs = append(attrs, slog.String(key, value))
+	}
+
+	return slog.Group(prefix, attrs...)
 }
 
 // parsePath validates and parses the proxy path into actions
@@ -156,7 +206,10 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// Create logger with request context
 	logger := h.logger.With(slog.String("request_id", requestID), slog.String("method", r.Method), slog.String("path", r.URL.Path), slog.String("service", h.serviceName), slog.String("remote_addr", r.RemoteAddr))
-	logger.Info("Incoming request", slog.String("user_agent", r.UserAgent()), slog.String("query", r.URL.RawQuery))
+	logger.Info("Incoming request",
+		slog.String("user_agent", r.UserAgent()),
+		slog.String("query", r.URL.RawQuery),
+		h.headersToLogAttrs(r.Header, "request_headers"))
 
 	// Parse the current hop from the path
 	actions, err := parsePath(r.URL.Path)
@@ -189,7 +242,10 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 
 			duration := time.Since(startTime)
-			logger.Info("Fault injection completed", slog.Duration("duration", duration), slog.Int("status_code", actions.FaultCode))
+			logger.Info("Fault injection completed",
+				slog.Duration("duration", duration),
+				slog.Int("status_code", actions.FaultCode),
+				h.headersToLogAttrs(w.Header(), "response_headers"))
 			return
 		}
 
@@ -233,7 +289,10 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 
 		duration := time.Since(startTime)
-		logger.Info("Request completed", slog.Duration("duration", duration), slog.Int("status_code", http.StatusOK))
+		logger.Info("Request completed",
+			slog.Duration("duration", duration),
+			slog.Int("status_code", http.StatusOK),
+			h.headersToLogAttrs(w.Header(), "response_headers"))
 		return
 	}
 
@@ -273,7 +332,12 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	totalDuration := time.Since(startTime)
-	logger.Info("Request completed", slog.Duration("total_duration", totalDuration), slog.Duration("forward_duration", forwardDuration), slog.Int("status_code", nextResp.StatusCode))
+	logger.Info("Request completed",
+		slog.Duration("total_duration", totalDuration),
+		slog.Duration("forward_duration", forwardDuration),
+		slog.Int("status_code", nextResp.StatusCode),
+		h.headersToLogAttrs(nextResp.Header, "upstream_headers"),
+		h.headersToLogAttrs(w.Header(), "response_headers"))
 }
 
 // sendFinalResponse creates and sends our own response when we're the final destination

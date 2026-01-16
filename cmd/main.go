@@ -17,6 +17,7 @@ func main() {
 	serviceName := flag.String("service-name", "proxy", "Service name")
 	logLevel := flag.String("log-level", "info", "Log level (debug, info, warn, error)")
 	logFormat := flag.String("log-format", "json", "Log format (json, text)")
+	logHeaders := flag.Bool("log-headers", false, "Log all request and response headers")
 	flag.Parse()
 
 	// Set up structured logging
@@ -24,7 +25,7 @@ func main() {
 
 	logger.Info("Starting microservice", slog.String("service", *serviceName), slog.Int("port", *port), slog.Duration("timeout", *timeout), slog.String("log_level", *logLevel), slog.String("log_format", *logFormat))
 
-	handler := proxy.NewHandler(*timeout, *serviceName, logger)
+	handler := proxy.NewHandler(*timeout, *serviceName, logger, proxy.WithHeaderLogging(*logHeaders))
 
 	mux := http.NewServeMux()
 	mux.Handle("/", handler)

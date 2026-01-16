@@ -300,10 +300,11 @@ curl http://localhost:8081/health
 
 ### Service Configuration
 - **Port**: `-port` flag (default: 8080)
-- **Timeout**: `-timeout` flag (default: 30s)  
+- **Timeout**: `-timeout` flag (default: 30s)
 - **Service Name**: `-service-name` flag (default: "proxy")
 - **Log Level**: `-log-level` flag (debug, info, warn, error)
 - **Log Format**: `-log-format` flag (json, text)
+- **Header Logging**: `-log-headers` flag (default: false) - Log all request and response headers with sensitive header redaction
 
 ### Health Check
 All services expose `/health` endpoint returning:
