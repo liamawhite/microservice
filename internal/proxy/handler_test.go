@@ -363,10 +363,10 @@ func TestHeaderLogging(t *testing.T) {
 	logger := createTestLogger()
 
 	tests := []struct {
-		name               string
-		logHeaders         bool
-		inputHeaders       http.Header
-		expectedInGroup    bool
+		name                string
+		logHeaders          bool
+		inputHeaders        http.Header
+		expectedInGroup     bool
 		expectedHeaderCount int
 	}{
 		{
@@ -390,9 +390,9 @@ func TestHeaderLogging(t *testing.T) {
 			expectedHeaderCount: 2,
 		},
 		{
-			name:       "headers enabled - empty headers",
-			logHeaders: true,
-			inputHeaders: http.Header{},
+			name:                "headers enabled - empty headers",
+			logHeaders:          true,
+			inputHeaders:        http.Header{},
 			expectedInGroup:     false,
 			expectedHeaderCount: 0,
 		},
@@ -422,10 +422,10 @@ func TestHeaderRedaction(t *testing.T) {
 	handler := NewHandler(30*time.Second, "test-service", logger, WithHeaderLogging(true))
 
 	tests := []struct {
-		name           string
-		headerName     string
-		headerValue    string
-		shouldRedact   bool
+		name         string
+		headerName   string
+		headerValue  string
+		shouldRedact bool
 	}{
 		{
 			name:         "Authorization header - should redact",
@@ -492,8 +492,8 @@ func TestWithHeaderLogging(t *testing.T) {
 	logger := createTestLogger()
 
 	tests := []struct {
-		name       string
-		enabled    bool
+		name        string
+		enabled     bool
 		wantEnabled bool
 	}{
 		{
