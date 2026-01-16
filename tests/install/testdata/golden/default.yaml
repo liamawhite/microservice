@@ -74,12 +74,13 @@ spec:
           image: "ghcr.io/liamawhite/microservice:latest"
           imagePullPolicy: IfNotPresent
           args:
-            - "-port=8080"
-            - "-service-name=microservice"
-            - "-timeout=30s"
-            - "-log-level=info"
-            - "-log-format=json"
-            - "-log-headers=false"
+            - "serve"
+            - "--port=8080"
+            - "--service-name=microservice"
+            - "--timeout=30s"
+            - "--log-level=info"
+            - "--log-format=json"
+            - "--log-headers=false"
           ports:
             - name: http
               containerPort: 8080

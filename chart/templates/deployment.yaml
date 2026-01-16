@@ -33,12 +33,13 @@ spec:
           image: "{{ $serviceConfig.image.repository }}:{{ $serviceConfig.image.tag | default $.Chart.AppVersion }}"
           imagePullPolicy: {{ $serviceConfig.image.pullPolicy }}
           args:
-            - "-port={{ $serviceConfig.config.port }}"
-            - "-service-name={{ $serviceConfig.config.serviceName }}"
-            - "-timeout={{ $serviceConfig.config.timeout }}"
-            - "-log-level={{ $serviceConfig.config.logLevel }}"
-            - "-log-format={{ $serviceConfig.config.logFormat }}"
-            - "-log-headers={{ $serviceConfig.config.logHeaders }}"
+            - "serve"
+            - "--port={{ $serviceConfig.config.port }}"
+            - "--service-name={{ $serviceConfig.config.serviceName }}"
+            - "--timeout={{ $serviceConfig.config.timeout }}"
+            - "--log-level={{ $serviceConfig.config.logLevel }}"
+            - "--log-format={{ $serviceConfig.config.logFormat }}"
+            - "--log-headers={{ $serviceConfig.config.logHeaders }}"
           ports:
             - name: http
               containerPort: {{ $serviceConfig.config.port }}

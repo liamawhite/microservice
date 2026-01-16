@@ -11,7 +11,14 @@ This service acts as an HTTP proxy that can chain requests through multiple serv
 ### Running the service
 
 ```bash
-go run cmd/main.go -port 8080 -service-name my-service
+# Using short flags (recommended)
+microservice serve -p 8080 -s my-service
+
+# Using long flags
+microservice serve --port 8080 --service-name my-service
+
+# During development
+go run . serve -p 8080 -s my-service
 ```
 
 ### Creating proxy chains
@@ -84,13 +91,39 @@ curl http://localhost:8080/health
 
 ## Configuration
 
-| Flag | Default | Description |
-|------|---------|-------------|
-| `-port` | 8080 | HTTP server port |
-| `-timeout` | 30s | Request timeout |
-| `-service-name` | proxy | Service identifier in responses |
-| `-log-level` | info | Log level (debug, info, warn, error) |
-| `-log-format` | text | Log format (json, text) |
+| Flag | Short | Default | Description |
+|------|-------|---------|-------------|
+| `--port` | `-p` | 8080 | HTTP server port |
+| `--timeout` | `-t` | 30s | Request timeout |
+| `--service-name` | `-s` | proxy | Service identifier in responses |
+| `--log-level` | `-l` | info | Log level (debug, info, warn, error) |
+| `--log-format` | `-f` | json | Log format (json, text) |
+| `--log-headers` | | false | Log request/response headers with sensitive data redaction |
+
+### CLI Help and Version
+
+```bash
+# Display all available commands and flags
+microservice --help
+
+# Get help for the serve command
+microservice serve --help
+
+# Show version information
+microservice --version
+# or
+microservice version
+```
+
+### Input Validation
+
+The CLI validates all inputs before starting the server:
+- Port must be between 1 and 65535
+- Timeout must be positive
+- Log level must be one of: debug, info, warn, error
+- Log format must be one of: json, text
+
+Invalid inputs will display a helpful error message.
 
 ## Response Format
 
