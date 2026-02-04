@@ -61,6 +61,7 @@ func TestParsePath(t *testing.T) {
 				NextHop:   "svca",
 				Remaining: "/",
 				IsLastHop: false,
+				Scheme:    "http",
 			},
 			wantErr: false,
 		},
@@ -71,6 +72,29 @@ func TestParsePath(t *testing.T) {
 				NextHop:   "svca:8080",
 				Remaining: "/",
 				IsLastHop: false,
+				Scheme:    "http",
+			},
+			wantErr: false,
+		},
+		{
+			name: "single service with explicit http",
+			path: "/proxy/http:/svca:8080",
+			want: actions{
+				NextHop:   "svca:8080",
+				Remaining: "/",
+				IsLastHop: false,
+				Scheme:    "http",
+			},
+			wantErr: false,
+		},
+		{
+			name: "single service with explicit https",
+			path: "/proxy/https:/svca:8443",
+			want: actions{
+				NextHop:   "svca:8443",
+				Remaining: "/",
+				IsLastHop: false,
+				Scheme:    "https",
 			},
 			wantErr: false,
 		},
@@ -81,6 +105,7 @@ func TestParsePath(t *testing.T) {
 				NextHop:   "svca",
 				Remaining: "/proxy/svcb",
 				IsLastHop: false,
+				Scheme:    "http",
 			},
 			wantErr: false,
 		},
@@ -91,6 +116,7 @@ func TestParsePath(t *testing.T) {
 				NextHop:   "svca:8080",
 				Remaining: "/proxy/svcb:9080",
 				IsLastHop: false,
+				Scheme:    "http",
 			},
 			wantErr: false,
 		},
@@ -101,6 +127,18 @@ func TestParsePath(t *testing.T) {
 				NextHop:   "svca:8080",
 				Remaining: "/proxy/svcb",
 				IsLastHop: false,
+				Scheme:    "http",
+			},
+			wantErr: false,
+		},
+		{
+			name: "two services with mixed protocols",
+			path: "/proxy/https:/svca:8443/proxy/http:/svcb:8080",
+			want: actions{
+				NextHop:   "svca:8443",
+				Remaining: "/proxy/http:/svcb:8080",
+				IsLastHop: false,
+				Scheme:    "https",
 			},
 			wantErr: false,
 		},
@@ -111,6 +149,7 @@ func TestParsePath(t *testing.T) {
 				NextHop:   "svca:8080",
 				Remaining: "/proxy/svcb:9080/proxy/svcc:10080",
 				IsLastHop: false,
+				Scheme:    "http",
 			},
 			wantErr: false,
 		},
@@ -522,4 +561,49 @@ func TestDefaultHeaderLogging(t *testing.T) {
 	// Handler created without WithHeaderLogging option should have logHeaders=false by default
 	handler := NewHandler(30*time.Second, "test-service", logger)
 	assert.False(t, handler.logHeaders, "Default logHeaders should be false")
+}
+
+func TestTLSInsecureOption(t *testing.T) {
+	logger := createTestLogger()
+
+	t.Run("tls insecure disabled by default", func(t *testing.T) {
+		handler := NewHandler(30*time.Second, "test-service", logger)
+		assert.False(t, handler.tlsInsecure)
+
+		// Check that the HTTP transport has InsecureSkipVerify set to false
+		transport, ok := handler.client.Transport.(*http.Transport)
+		require.True(t, ok, "Expected HTTP transport")
+		require.NotNil(t, transport.TLSClientConfig)
+		assert.False(t, transport.TLSClientConfig.InsecureSkipVerify)
+	})
+
+	t.Run("tls insecure enabled", func(t *testing.T) {
+		handler := NewHandler(30*time.Second, "test-service", logger, WithTLSInsecure(true))
+		assert.True(t, handler.tlsInsecure)
+
+		// Check that the HTTP transport has InsecureSkipVerify set to true
+		transport, ok := handler.client.Transport.(*http.Transport)
+		require.True(t, ok, "Expected HTTP transport")
+		require.NotNil(t, transport.TLSClientConfig)
+		assert.True(t, transport.TLSClientConfig.InsecureSkipVerify)
+	})
+
+	t.Run("tls insecure explicitly disabled", func(t *testing.T) {
+		handler := NewHandler(30*time.Second, "test-service", logger, WithTLSInsecure(false))
+		assert.False(t, handler.tlsInsecure)
+
+		// Check that the HTTP transport has InsecureSkipVerify set to false
+		transport, ok := handler.client.Transport.(*http.Transport)
+		require.True(t, ok, "Expected HTTP transport")
+		require.NotNil(t, transport.TLSClientConfig)
+		assert.False(t, transport.TLSClientConfig.InsecureSkipVerify)
+	})
+}
+
+func TestDefaultTLSInsecure(t *testing.T) {
+	logger := createTestLogger()
+
+	// Handler created without WithTLSInsecure option should have tlsInsecure=false by default
+	handler := NewHandler(30*time.Second, "test-service", logger)
+	assert.False(t, handler.tlsInsecure, "Default tlsInsecure should be false")
 }

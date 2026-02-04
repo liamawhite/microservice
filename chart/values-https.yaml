@@ -1,0 +1,111 @@
+# HTTPS-enabled service deployment example
+# Usage: helm install my-microservice ./chart/ -f values-https.yaml
+#
+# IMPORTANT: This example uses placeholder certificates. For production use:
+# 1. Generate proper certificates (e.g., using cert-manager or your PKI)
+# 2. Create a Kubernetes TLS secret: kubectl create secret tls my-tls-secret --cert=cert.pem --key=key.pem
+# 3. Reference it using tls.existingSecret: "my-tls-secret"
+
+# Global chart configuration
+nameOverride: ""
+fullnameOverride: ""
+imagePullSecrets: []
+
+# Default values for all services
+defaults:
+  replicaCount: 1
+
+  image:
+    repository: ghcr.io/liamawhite/microservice
+    pullPolicy: IfNotPresent
+    tag: "latest"
+
+  serviceAccount:
+    create: true
+    automount: true
+    name: ""
+
+  securityContext: {}
+
+  service:
+    type: ClusterIP
+    # HTTPS typically uses port 8443
+    port: 8443
+
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "100m"
+    limits:
+      memory: "256Mi"
+      cpu: "200m"
+
+  livenessProbe:
+    httpGet:
+      path: /health
+      port: http
+      # Enable HTTPS for health checks
+      scheme: HTTPS
+    initialDelaySeconds: 30
+    periodSeconds: 10
+
+  readinessProbe:
+    httpGet:
+      path: /health
+      port: http
+      # Enable HTTPS for health checks
+      scheme: HTTPS
+    initialDelaySeconds: 5
+    periodSeconds: 5
+
+  config:
+    serviceName: "microservice"
+    # HTTPS typically uses port 8443
+    port: 8443
+    timeout: "30s"
+    logLevel: "info"
+    logFormat: "json"
+    logHeaders: false
+
+    # TLS configuration
+    tls:
+      # Option 1: Use existing Kubernetes TLS secret (recommended)
+      # Create secret: kubectl create secret tls my-tls-secret --cert=cert.pem --key=key.pem
+      existingSecret: ""
+
+      # Option 2: Provide certificates inline (base64 encoded)
+      # Generate test cert: openssl req -x509 -newkey rsa:2048 -nodes -keyout key.pem -out cert.pem -days 365
+      # Base64 encode: cat cert.pem | base64 -w 0
+      cert: ""
+      key: ""
+
+      # Skip TLS verification for upstream HTTPS requests
+      # Set to true when using self-signed certificates for testing
+      insecure: true
+
+# Single HTTPS service configuration
+services:
+  - name: "microservice"
+    # Uses all HTTPS defaults above
+
+# Example multi-service HTTPS topology:
+# services:
+#   - name: "frontend"
+#     config:
+#       serviceName: "frontend"
+#       port: 8443
+#       tls:
+#         existingSecret: "frontend-tls"
+#         insecure: true
+#     service:
+#       port: 8443
+#
+#   - name: "backend"
+#     config:
+#       serviceName: "backend"
+#       port: 8444
+#       tls:
+#         existingSecret: "backend-tls"
+#         insecure: true
+#     service:
+#       port: 8444

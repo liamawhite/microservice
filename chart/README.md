@@ -9,6 +9,7 @@ A Helm chart for deploying composable mock microservice topologies. This chart c
 - **Auto-scaling Support**: Optional HPA configuration per service
 - **Service Discovery**: Kubernetes-native service discovery between components
 - **Resource Management**: Configurable resource requests and limits per service
+- **HTTPS/TLS Support**: Configure TLS certificates for secure communication
 
 ## Quick Start
 
@@ -20,6 +21,22 @@ helm install my-microservice ./chart/ -f values-single.yaml
 ### Three-Tier Topology
 ```bash
 helm install my-topology ./chart/ -f values-three-tier.yaml
+```
+
+### HTTPS-Enabled Service
+```bash
+# Create TLS secret first
+kubectl create secret tls my-tls-secret --cert=cert.pem --key=key.pem
+
+# Install with HTTPS configuration
+helm install my-https-service ./chart/ \
+  --set services[0].name=secure-service \
+  --set services[0].config.port=8443 \
+  --set services[0].config.tls.existingSecret=my-tls-secret \
+  --set services[0].config.tls.insecure=true
+
+# Or use the HTTPS example values file
+helm install my-https-service ./chart/ -f values-https.yaml
 ```
 
 ## Configuration
@@ -97,6 +114,11 @@ services:
 | `defaults.config.timeout` | Request timeout | `"30s"` |
 | `defaults.config.logLevel` | Log level | `"info"` |
 | `defaults.config.logFormat` | Log format | `"json"` |
+| `defaults.config.logHeaders` | Log request/response headers | `false` |
+| `defaults.config.tls.existingSecret` | Existing TLS secret name | `""` |
+| `defaults.config.tls.cert` | TLS certificate (base64) | `""` |
+| `defaults.config.tls.key` | TLS private key (base64) | `""` |
+| `defaults.config.tls.insecure` | Skip upstream TLS verification | `false` |
 
 ### Service-Specific Parameters
 
@@ -124,6 +146,11 @@ The chart includes pre-configured examples:
 - **Backend**: Application logic service with enhanced resources (port 8081)
 - **Database**: Data storage service with autoscaling (port 8082)
 
+### HTTPS Service (`values-https.yaml`)
+- Single service with HTTPS/TLS enabled
+- Self-signed certificate support with insecure mode
+- Examples for both existingSecret and inline certificates
+
 ## Usage Patterns
 
 ### Testing Proxy Chains
@@ -141,6 +168,26 @@ curl http://localhost:8080/proxy/my-topology-service-b:8081/proxy/my-topology-se
 kubectl port-forward service/my-topology-service-b 8081:8081
 curl http://localhost:8081/health
 ```
+
+### Testing HTTPS Proxy Chains
+
+For HTTPS-enabled services:
+
+```bash
+# Port-forward to HTTPS service
+kubectl port-forward service/my-https-frontend 8443:8443
+
+# HTTPS chain with explicit protocol
+curl -k https://localhost:8443/proxy/https://my-https-backend:8444
+
+# Mixed HTTP/HTTPS chain
+curl -k https://localhost:8443/proxy/http://my-http-service:8080/proxy/https://my-https-backend:8444
+
+# Health check over HTTPS
+curl -k https://localhost:8443/health
+```
+
+Note: Use `-k` (insecure) flag with curl when testing with self-signed certificates.
 
 ### Custom Topologies
 
@@ -160,6 +207,104 @@ services:
     config:
       serviceName: "database"
       port: 8082
+```
+
+### HTTPS Configuration
+
+Configure HTTPS/TLS for secure communication between services.
+
+#### Using Existing TLS Secret (Recommended)
+
+```yaml
+# Create TLS secret first
+# kubectl create secret tls my-tls-secret --cert=cert.pem --key=key.pem
+
+services:
+  - name: "secure-service"
+    config:
+      serviceName: "secure-service"
+      port: 8443
+      tls:
+        existingSecret: "my-tls-secret"
+        insecure: false  # Set to true for self-signed certs
+    service:
+      port: 8443
+    livenessProbe:
+      httpGet:
+        path: /health
+        port: http
+        scheme: HTTPS
+    readinessProbe:
+      httpGet:
+        path: /health
+        port: http
+        scheme: HTTPS
+```
+
+#### Using Inline Certificates
+
+```yaml
+services:
+  - name: "secure-service"
+    config:
+      serviceName: "secure-service"
+      port: 8443
+      tls:
+        # Base64-encoded certificate and key
+        cert: "LS0tLS1CRUdJTi..."
+        key: "LS0tLS1CRUdJTi..."
+        insecure: true  # Required for self-signed certs
+    service:
+      port: 8443
+```
+
+#### Generating Test Certificates
+
+For testing purposes, generate self-signed certificates:
+
+```bash
+# Generate self-signed certificate
+openssl req -x509 -newkey rsa:2048 -nodes \
+  -keyout key.pem -out cert.pem -days 365 \
+  -subj "/CN=localhost"
+
+# Create Kubernetes secret
+kubectl create secret tls test-tls-secret \
+  --cert=cert.pem --key=key.pem
+
+# Use in Helm chart
+helm install my-service ./chart/ \
+  --set services[0].config.tls.existingSecret=test-tls-secret \
+  --set services[0].config.tls.insecure=true
+```
+
+#### Mixed HTTP/HTTPS Topologies
+
+Deploy services with different protocols:
+
+```yaml
+services:
+  # HTTP frontend
+  - name: "frontend"
+    config:
+      serviceName: "frontend"
+      port: 8080
+    service:
+      port: 8080
+
+  # HTTPS backend
+  - name: "backend"
+    config:
+      serviceName: "backend"
+      port: 8443
+      tls:
+        existingSecret: "backend-tls"
+        insecure: true
+    service:
+      port: 8443
+
+# Test mixed chain:
+# curl http://frontend:8080/proxy/https://backend:8443
 ```
 
 ## Resources Created

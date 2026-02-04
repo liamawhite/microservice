@@ -17,8 +17,11 @@ import (
 
 // ServiceConfig represents the configuration for a single service
 type ServiceConfig struct {
-	Name string
-	Port string
+	Name     string
+	Port     string
+	TLS      bool
+	CertFile string
+	KeyFile  string
 }
 
 // ServiceResult represents a created service with its container and mapped port
