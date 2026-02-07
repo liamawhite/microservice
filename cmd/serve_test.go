@@ -330,7 +330,7 @@ func generateTestCertificates(t *testing.T) (certPath, keyPath string) {
 	if err != nil {
 		t.Fatalf("failed to create cert file: %v", err)
 	}
-	defer certFile.Close()
+	defer func() { _ = certFile.Close() }()
 
 	if err := pem.Encode(certFile, &pem.Block{Type: "CERTIFICATE", Bytes: certDER}); err != nil {
 		t.Fatalf("failed to encode certificate: %v", err)
@@ -342,7 +342,7 @@ func generateTestCertificates(t *testing.T) (certPath, keyPath string) {
 	if err != nil {
 		t.Fatalf("failed to create key file: %v", err)
 	}
-	defer keyFile.Close()
+	defer func() { _ = keyFile.Close() }()
 
 	privateKeyBytes := x509.MarshalPKCS1PrivateKey(privateKey)
 	if err := pem.Encode(keyFile, &pem.Block{Type: "RSA PRIVATE KEY", Bytes: privateKeyBytes}); err != nil {

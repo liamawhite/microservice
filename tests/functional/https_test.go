@@ -58,7 +58,7 @@ func generateTestCertificates(t *testing.T) (certPath, keyPath string) {
 	certPath = filepath.Join(tmpDir, "cert.pem")
 	certFile, err := os.Create(certPath)
 	require.NoError(t, err)
-	defer certFile.Close()
+	defer func() { _ = certFile.Close() }()
 
 	err = pem.Encode(certFile, &pem.Block{Type: "CERTIFICATE", Bytes: certDER})
 	require.NoError(t, err)
@@ -67,7 +67,7 @@ func generateTestCertificates(t *testing.T) (certPath, keyPath string) {
 	keyPath = filepath.Join(tmpDir, "key.pem")
 	keyFile, err := os.Create(keyPath)
 	require.NoError(t, err)
-	defer keyFile.Close()
+	defer func() { _ = keyFile.Close() }()
 
 	privateKeyBytes := x509.MarshalPKCS1PrivateKey(privateKey)
 	err = pem.Encode(keyFile, &pem.Block{Type: "RSA PRIVATE KEY", Bytes: privateKeyBytes})
@@ -195,7 +195,7 @@ func TestHTTPSProxyChain(t *testing.T) {
 
 		resp, err := client.Get(url)
 		require.NoError(t, err)
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -218,7 +218,7 @@ func TestHTTPSProxyChain(t *testing.T) {
 
 		resp, err := client.Get(url)
 		require.NoError(t, err)
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -298,7 +298,7 @@ func TestMixedHTTPAndHTTPS(t *testing.T) {
 			Started:          true,
 		})
 		require.NoError(t, err)
-		defer container.Terminate(ctx)
+		defer func() { _ = container.Terminate(ctx) }()
 
 		mappedPort, err := container.MappedPort(ctx, nat.Port(exposedPort))
 		require.NoError(t, err)
@@ -310,7 +310,7 @@ func TestMixedHTTPAndHTTPS(t *testing.T) {
 
 		resp, err := client.Get(url)
 		require.NoError(t, err)
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -390,7 +390,7 @@ func TestAutoSchemeDetection(t *testing.T) {
 		Started:          true,
 	})
 	require.NoError(t, err)
-	defer container.Terminate(ctx)
+	defer func() { _ = container.Terminate(ctx) }()
 
 	mappedPort, err := container.MappedPort(ctx, nat.Port(exposedPort))
 	require.NoError(t, err)
@@ -401,7 +401,7 @@ func TestAutoSchemeDetection(t *testing.T) {
 
 		resp, err := client.Get(url)
 		require.NoError(t, err)
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 

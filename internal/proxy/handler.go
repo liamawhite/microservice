@@ -56,6 +56,7 @@ func NewHandler(timeout time.Duration, serviceName string, logger *slog.Logger, 
 			Transport: &http.Transport{
 				TLSClientConfig: &tls.Config{
 					InsecureSkipVerify: false,
+					MinVersion:         tls.VersionTLS12,
 				},
 			},
 		},
