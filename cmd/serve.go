@@ -14,12 +14,12 @@ import (
 
 var (
 	// Flag variables for serve command
-	port        int
-	timeout     time.Duration
-	serviceName string
-	logLevel    string
-	logFormat   string
-	logHeaders  bool
+	port                int
+	timeout             time.Duration
+	serviceName         string
+	logLevel            string
+	logFormat           string
+	logHeaders          bool
 	tlsCertFile         string
 	tlsKeyFile          string
 	upstreamTLSInsecure bool
