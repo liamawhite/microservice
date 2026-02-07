@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"crypto/tls"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -13,12 +14,15 @@ import (
 
 var (
 	// Flag variables for serve command
-	port        int
-	timeout     time.Duration
-	serviceName string
-	logLevel    string
-	logFormat   string
-	logHeaders  bool
+	port                int
+	timeout             time.Duration
+	serviceName         string
+	logLevel            string
+	logFormat           string
+	logHeaders          bool
+	tlsCertFile         string
+	tlsKeyFile          string
+	upstreamTLSInsecure bool
 )
 
 // serveCmd represents the serve command
@@ -52,6 +56,9 @@ func init() {
 	serveCmd.Flags().StringVarP(&logLevel, "log-level", "l", "info", "Log level (debug, info, warn, error)")
 	serveCmd.Flags().StringVarP(&logFormat, "log-format", "f", "json", "Log output format (json, text)")
 	serveCmd.Flags().BoolVar(&logHeaders, "log-headers", false, "Log all request and response headers with sensitive data redaction")
+	serveCmd.Flags().StringVar(&tlsCertFile, "tls-cert", "", "Path to TLS certificate file (enables HTTPS when provided with --tls-key)")
+	serveCmd.Flags().StringVar(&tlsKeyFile, "tls-key", "", "Path to TLS key file (enables HTTPS when provided with --tls-cert)")
+	serveCmd.Flags().BoolVar(&upstreamTLSInsecure, "upstream-tls-insecure", false, "Skip TLS verification for upstream requests (useful for self-signed certs)")
 }
 
 // validateFlags validates all flag values before starting the server
@@ -86,6 +93,27 @@ func validateFlags(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("log-format must be one of [json, text], got %q", logFormat)
 	}
 
+	// Validate TLS configuration - both cert and key must be provided together
+	if (tlsCertFile != "" && tlsKeyFile == "") || (tlsCertFile == "" && tlsKeyFile != "") {
+		return fmt.Errorf("both --tls-cert and --tls-key must be provided together")
+	}
+
+	// If TLS cert and key are provided, validate them
+	if tlsCertFile != "" && tlsKeyFile != "" {
+		// Validate files exist
+		if _, err := os.Stat(tlsCertFile); err != nil {
+			return fmt.Errorf("certificate file not found: %w", err)
+		}
+		if _, err := os.Stat(tlsKeyFile); err != nil {
+			return fmt.Errorf("key file not found: %w", err)
+		}
+
+		// Validate certificate can be loaded (fail fast)
+		if _, err := tls.LoadX509KeyPair(tlsCertFile, tlsKeyFile); err != nil {
+			return fmt.Errorf("failed to load TLS certificate/key pair: %w", err)
+		}
+	}
+
 	return nil
 }
 
@@ -94,6 +122,9 @@ func runServer(cmd *cobra.Command, args []string) error {
 	// Set up structured logging
 	logger := setupLogger(logLevel, logFormat, serviceName)
 
+	// Determine if TLS is enabled based on cert/key presence
+	tlsEnabled := tlsCertFile != "" && tlsKeyFile != ""
+
 	logger.Info("Starting microservice",
 		slog.String("service", serviceName),
 		slog.Int("port", port),
@@ -101,9 +132,13 @@ func runServer(cmd *cobra.Command, args []string) error {
 		slog.String("log_level", logLevel),
 		slog.String("log_format", logFormat),
 		slog.Bool("log_headers", logHeaders),
+		slog.Bool("tls_enabled", tlsEnabled),
+		slog.Bool("upstream_tls_insecure", upstreamTLSInsecure),
 	)
 
-	handler := proxy.NewHandler(timeout, serviceName, logger, proxy.WithHeaderLogging(logHeaders))
+	handler := proxy.NewHandler(timeout, serviceName, logger,
+		proxy.WithHeaderLogging(logHeaders),
+		proxy.WithTLSInsecure(upstreamTLSInsecure))
 
 	mux := http.NewServeMux()
 	mux.Handle("/", handler)
@@ -125,10 +160,24 @@ func runServer(cmd *cobra.Command, args []string) error {
 		Handler: mux,
 	}
 
-	logger.Info("Server listening", slog.String("addr", server.Addr))
-	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		logger.Error("Server error", slog.String("error", err.Error()))
-		return err
+	protocol := "http"
+	if tlsEnabled {
+		protocol = "https"
+	}
+	logger.Info("Server listening",
+		slog.String("addr", server.Addr),
+		slog.String("protocol", protocol))
+
+	if tlsEnabled {
+		if err := server.ListenAndServeTLS(tlsCertFile, tlsKeyFile); err != nil && err != http.ErrServerClosed {
+			logger.Error("HTTPS server error", slog.String("error", err.Error()))
+			return err
+		}
+	} else {
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			logger.Error("HTTP server error", slog.String("error", err.Error()))
+			return err
+		}
 	}
 
 	return nil

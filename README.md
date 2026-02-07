@@ -33,6 +33,32 @@ curl http://localhost:8080/proxy/service-b:8080/proxy/service-c:80
 curl http://localhost:8080/proxy/service-b:8080
 ```
 
+### HTTPS Support
+
+Each hop in the proxy chain can specify HTTP or HTTPS:
+
+```bash
+# Proxy to HTTPS service
+curl http://localhost:8080/proxy/https://service-b:8443
+
+# Mixed protocol chain (HTTP -> HTTPS -> HTTP)
+curl http://localhost:8080/proxy/https://service-a:8443/proxy/http://service-b:8080
+
+# Run HTTPS server
+microservice serve --tls-cert=cert.pem --tls-key=key.pem
+
+# HTTPS server with self-signed cert (skip upstream TLS verification)
+microservice serve --tls-cert=cert.pem --tls-key=key.pem --upstream-tls-insecure
+
+# Test HTTPS chain
+curl -k https://localhost:8443/proxy/https://service-b:9443
+```
+
+**Protocol syntax:**
+- Default: HTTP if no protocol specified (`/proxy/service:8080`)
+- Explicit HTTPS: `/proxy/https://service:8443`
+- Explicit HTTP: `/proxy/http://service:8080`
+
 ### Fault injection
 
 Simulate service failures and test retry logic using the `/fault/` path format:
@@ -93,12 +119,15 @@ curl http://localhost:8080/health
 
 | Flag | Short | Default | Description |
 |------|-------|---------|-------------|
-| `--port` | `-p` | 8080 | HTTP server port |
+| `--port` | `-p` | 8080 | HTTP/HTTPS server port |
 | `--timeout` | `-t` | 30s | Request timeout |
 | `--service-name` | `-s` | proxy | Service identifier in responses |
 | `--log-level` | `-l` | info | Log level (debug, info, warn, error) |
 | `--log-format` | `-f` | json | Log format (json, text) |
 | `--log-headers` | | false | Log request/response headers with sensitive data redaction |
+| `--tls-cert` | | "" | Path to TLS certificate (enables HTTPS with --tls-key) |
+| `--tls-key` | | "" | Path to TLS key file (enables HTTPS with --tls-cert) |
+| `--upstream-tls-insecure` | | false | Skip TLS verification for upstream HTTPS requests |
 
 ### CLI Help and Version
 

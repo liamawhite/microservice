@@ -76,6 +76,16 @@ defaults:
     logLevel: "info"
     logFormat: "json"
     logHeaders: false
+    # TLS configuration (optional)
+    # tls:
+    #   enabled: false
+    #   # Use existing secret containing tls.crt and tls.key
+    #   existingSecret: ""
+    #   # Or provide certificate and key directly (base64 encoded)
+    #   cert: ""
+    #   key: ""
+    #   # Skip TLS verification for upstream HTTPS requests (useful for self-signed certs)
+    #   insecure: false
 
 # Array of services to deploy - each can override defaults
 # See values-single.yaml and values-three-tier.yaml for examples

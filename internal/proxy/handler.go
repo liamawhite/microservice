@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -20,6 +21,7 @@ type Handler struct {
 	serviceName string
 	logger      *slog.Logger
 	logHeaders  bool
+	tlsInsecure bool
 }
 
 // Response represents the standard response format
@@ -39,21 +41,40 @@ func WithHeaderLogging(enabled bool) HandlerOption {
 	}
 }
 
+// WithTLSInsecure configures whether to skip TLS verification for upstream requests
+func WithTLSInsecure(insecure bool) HandlerOption {
+	return func(h *Handler) {
+		h.tlsInsecure = insecure
+	}
+}
+
 // NewHandler creates a new proxy handler with structured logging
 func NewHandler(timeout time.Duration, serviceName string, logger *slog.Logger, opts ...HandlerOption) *Handler {
 	h := &Handler{
 		client: &http.Client{
 			Timeout: timeout,
+			Transport: &http.Transport{
+				TLSClientConfig: &tls.Config{
+					InsecureSkipVerify: false,
+					MinVersion:         tls.VersionTLS12,
+				},
+			},
 		},
 		timeout:     timeout,
 		serviceName: serviceName,
 		logger:      logger,
-		logHeaders:  false, // default to false
+		logHeaders:  false,
+		tlsInsecure: false,
 	}
 
 	// Apply options
 	for _, opt := range opts {
 		opt(h)
+	}
+
+	// Apply TLS insecure setting
+	if h.tlsInsecure {
+		h.client.Transport.(*http.Transport).TLSClientConfig.InsecureSkipVerify = true
 	}
 
 	return h
@@ -64,6 +85,7 @@ type actions struct {
 	NextHop         string // The next hop service and port to forward to
 	Remaining       string // The remaining path after next hop
 	IsLastHop       bool   // Whether this is the last hop in the chain
+	Scheme          string // The URL scheme to use (http or https), defaults to http
 	IsFault         bool   // Whether this is a fault injection
 	FaultCode       int    // HTTP status code to inject (400-599)
 	FaultPercentage int    // Percentage chance of fault triggering (0-100)
@@ -178,24 +200,64 @@ func parsePath(path string) (actions, error) {
 		return actions{}, fmt.Errorf("invalid path: must start with /proxy/ or /fault/")
 	}
 
-	// Get the first service
-	nextHop := parts[2]
-	if nextHop == "" {
+	// Extract everything after "/proxy/"
+	afterProxy := strings.TrimPrefix(path, "/proxy/")
+	if afterProxy == "" {
 		return actions{}, fmt.Errorf("invalid path: empty service name")
 	}
 
-	// If there's more path, it's the remaining path
-	var remaining string
-	if len(parts) > 3 {
-		remaining = "/" + strings.Join(parts[3:], "/")
+	// Find the next "/proxy/" or "/fault/" segment to determine where nextHop ends
+	var nextHop, remaining string
+	nextProxyIdx := strings.Index(afterProxy, "/proxy/")
+	nextFaultIdx := strings.Index(afterProxy, "/fault/")
+
+	var nextSegmentIdx int
+	if nextProxyIdx >= 0 && nextFaultIdx >= 0 {
+		// Both found, use the earlier one
+		if nextProxyIdx < nextFaultIdx {
+			nextSegmentIdx = nextProxyIdx
+		} else {
+			nextSegmentIdx = nextFaultIdx
+		}
+	} else if nextProxyIdx >= 0 {
+		nextSegmentIdx = nextProxyIdx
+	} else if nextFaultIdx >= 0 {
+		nextSegmentIdx = nextFaultIdx
 	} else {
+		// No more segments, entire afterProxy is the nextHop
+		nextSegmentIdx = -1
+	}
+
+	if nextSegmentIdx >= 0 {
+		nextHop = afterProxy[:nextSegmentIdx]
+		remaining = afterProxy[nextSegmentIdx:]
+	} else {
+		nextHop = afterProxy
 		remaining = "/"
+	}
+
+	// Parse scheme from nextHop
+	// Format can be: "service:port" or "https:/service:port" or "http:/service:port"
+	// Note: http:// and https:// get normalized to http:/ and https:/ in URL paths
+	scheme := "http" // default to http
+	if strings.HasPrefix(nextHop, "https:/") {
+		scheme = "https"
+		nextHop = strings.TrimPrefix(nextHop, "https:/")
+	} else if strings.HasPrefix(nextHop, "http:/") {
+		scheme = "http"
+		nextHop = strings.TrimPrefix(nextHop, "http:/")
+	}
+
+	// Validate nextHop is not empty after parsing
+	if nextHop == "" || nextHop == "/" {
+		return actions{}, fmt.Errorf("invalid path: empty service name")
 	}
 
 	return actions{
 		NextHop:   nextHop,
 		Remaining: remaining,
 		IsLastHop: false,
+		Scheme:    scheme,
 	}, nil
 }
 
@@ -297,9 +359,12 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Construct the next hop URL with port, using only the remaining path
-	nextHopURL := fmt.Sprintf("http://%s%s", actions.NextHop, actions.Remaining)
+	nextHopURL := fmt.Sprintf("%s://%s%s", actions.Scheme, actions.NextHop, actions.Remaining)
 
-	logger.Info("Forwarding to next hop", slog.String("next_hop_url", nextHopURL), slog.String("next_service", actions.NextHop))
+	logger.Info("Forwarding to next hop",
+		slog.String("next_hop_url", nextHopURL),
+		slog.String("scheme", actions.Scheme),
+		slog.String("next_service", actions.NextHop))
 
 	// Forward to next hop
 	nextReq, err := http.NewRequestWithContext(ctx, r.Method, nextHopURL, r.Body)

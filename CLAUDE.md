@@ -19,9 +19,10 @@ The Makefile automatically uses the Nix shell via `SHELL := nix develop --comman
 ## Core Architecture
 
 ### Proxy Chain System
-- **Entry Point**: `cmd/main.go` - HTTP server with configurable ports, timeouts, and logging
+- **Entry Point**: `cmd/main.go` - HTTP/HTTPS server with configurable ports, timeouts, and logging
 - **Proxy Handler**: `internal/proxy/handler.go` - Core proxy logic that parses paths and forwards requests
-- **Path Format**: `/proxy/service:port/proxy/next-service:port/...` - Chain multiple services together
+- **Path Format**: `/proxy/[protocol://]service:port/proxy/next-service:port/...` - Chain multiple services together
+- **Protocol Support**: Each hop can specify `http://` or `https://` (defaults to HTTP if omitted)
 - **Final Hop**: When no more `/proxy/` segments exist, the service returns its own response
 
 ### Request Flow
@@ -140,6 +141,93 @@ curl http://localhost:8080/fault/504/100
 - **Random Generation**: Uses `math/rand.Intn(100)` to determine if fault triggers based on percentage
 - **Response Handler**: `sendFaultResponse()` function in `internal/proxy/handler.go:252-278` generates fault responses
 - **Execution Logic**: `ServeHTTP()` function in `internal/proxy/handler.go:175-222` contains fault injection logic
+
+## HTTPS Support
+
+The service supports HTTPS for both the server and upstream proxy requests. TLS is automatically enabled when certificate and key files are provided.
+
+### Server Configuration
+
+Enable HTTPS by providing both `--tls-cert` and `--tls-key` flags:
+
+```bash
+# Start HTTPS server (TLS automatically enabled)
+./microservice serve --tls-cert=cert.pem --tls-key=key.pem
+
+# HTTPS server with self-signed cert (skip verification for upstreams)
+./microservice serve --tls-cert=cert.pem --tls-key=key.pem --upstream-tls-insecure
+```
+
+### Protocol-in-Path Syntax
+
+Each hop in the proxy chain can specify its protocol using standard URL syntax:
+
+```bash
+# Default to HTTP (backward compatible)
+/proxy/service-a:8080
+
+# Explicit HTTPS
+/proxy/https://service-b:8443
+
+# Explicit HTTP
+/proxy/http://service-c:8080
+
+# Mixed protocol chain
+/proxy/https://service-a:8443/proxy/http://service-b:8080/proxy/https://service-c:9443
+```
+
+**Note**: Due to HTTP URL path normalization, `https://` becomes `https:/` (single slash). The parser handles this automatically.
+
+### HTTPS Examples
+
+**All-HTTPS Topology**:
+```bash
+# Service A (HTTPS server, forwards to HTTPS upstreams)
+./microservice serve -p 8443 -s service-a \
+  --tls-cert=cert.pem --tls-key=key.pem --upstream-tls-insecure
+
+# Service B (HTTPS server)
+./microservice serve -p 9443 -s service-b \
+  --tls-cert=cert.pem --tls-key=key.pem --upstream-tls-insecure
+
+# Test HTTPS chain
+curl -k https://localhost:8443/proxy/https://service-b:9443
+```
+
+**Mixed HTTP/HTTPS**:
+```bash
+# HTTP server that forwards to HTTPS backend
+./microservice serve -p 8080 -s frontend --upstream-tls-insecure
+
+# HTTPS backend
+./microservice serve -p 8443 -s backend \
+  --tls-cert=cert.pem --tls-key=key.pem
+
+# Test: HTTP -> HTTPS
+curl http://localhost:8080/proxy/https://backend:8443
+```
+
+**Kubernetes with HTTPS**:
+```bash
+# Deploy HTTPS-enabled services
+kubectl port-forward service/https-frontend 8443:8443
+curl -k https://localhost:8443/proxy/https://backend:8443/proxy/https://database:8443
+```
+
+### TLS Configuration Flags
+
+| Flag | Description |
+|------|-------------|
+| `--tls-cert` | Path to TLS certificate file (enables HTTPS when provided with `--tls-key`) |
+| `--tls-key` | Path to TLS key file (enables HTTPS when provided with `--tls-cert`) |
+| `--upstream-tls-insecure` | Skip TLS verification for upstream requests (useful for self-signed certificates) |
+
+### Implementation Details
+
+- **TLS Detection**: Server automatically enables HTTPS when both cert and key are provided
+- **Per-Hop Protocol**: Each hop parses `http://` or `https://` prefix from the path
+- **Path Parsing**: Handles URL-normalized paths (e.g., `https://` → `https:/`)
+- **Client Configuration**: HTTP client configured with TLS support and optional `InsecureSkipVerify`
 
 ## Common Commands
 
@@ -304,12 +392,15 @@ The service uses [Cobra](https://github.com/spf13/cobra) for CLI argument parsin
 
 | Flag | Short | Type | Default | Description |
 |------|-------|------|---------|-------------|
-| `--port` | `-p` | int | 8080 | HTTP server port |
+| `--port` | `-p` | int | 8080 | HTTP/HTTPS server port |
 | `--timeout` | `-t` | duration | 30s | Request timeout |
 | `--service-name` | `-s` | string | "proxy" | Service identifier in responses |
 | `--log-level` | `-l` | string | "info" | Log level (debug, info, warn, error) |
 | `--log-format` | `-f` | string | "json" | Log output format (json, text) |
 | `--log-headers` | | bool | false | Log all request and response headers with sensitive data redaction |
+| `--tls-cert` | | string | "" | Path to TLS certificate file (enables HTTPS when provided with --tls-key) |
+| `--tls-key` | | string | "" | Path to TLS key file (enables HTTPS when provided with --tls-cert) |
+| `--upstream-tls-insecure` | | bool | false | Skip TLS verification for upstream requests (useful for self-signed certs) |
 
 ### Usage Examples
 

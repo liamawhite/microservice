@@ -1,6 +1,14 @@
 package cmd
 
 import (
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/pem"
+	"math/big"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 )
@@ -181,6 +189,45 @@ func TestValidateFlags(t *testing.T) {
 			errorMsg:    "log-format must be one of [json, text]",
 		},
 		{
+			name: "cert provided without key file",
+			setupFlags: func() {
+				port = 8080
+				timeout = 30 * time.Second
+				logLevel = "info"
+				logFormat = "json"
+				tlsCertFile = "/path/to/cert.pem"
+				tlsKeyFile = ""
+			},
+			expectError: true,
+			errorMsg:    "both --tls-cert and --tls-key must be provided together",
+		},
+		{
+			name: "key provided without cert file",
+			setupFlags: func() {
+				port = 8080
+				timeout = 30 * time.Second
+				logLevel = "info"
+				logFormat = "json"
+				tlsCertFile = ""
+				tlsKeyFile = "/path/to/key.pem"
+			},
+			expectError: true,
+			errorMsg:    "both --tls-cert and --tls-key must be provided together",
+		},
+		{
+			name: "cert and key with non-existent files",
+			setupFlags: func() {
+				port = 8080
+				timeout = 30 * time.Second
+				logLevel = "info"
+				logFormat = "json"
+				tlsCertFile = "/nonexistent/cert.pem"
+				tlsKeyFile = "/nonexistent/key.pem"
+			},
+			expectError: true,
+			errorMsg:    "certificate file not found",
+		},
+		{
 			name: "all valid options combined",
 			setupFlags: func() {
 				port = 9090
@@ -203,6 +250,9 @@ func TestValidateFlags(t *testing.T) {
 			logLevel = "info"
 			logFormat = "json"
 			logHeaders = false
+			tlsCertFile = ""
+			tlsKeyFile = ""
+			upstreamTLSInsecure = false
 
 			// Setup test-specific flags
 			tt.setupFlags()
@@ -239,4 +289,112 @@ func stringContains(s, substr string) bool {
 		}
 	}
 	return false
+}
+
+// generateTestCertificates creates a self-signed certificate for testing
+func generateTestCertificates(t *testing.T) (certPath, keyPath string) {
+	t.Helper()
+
+	// Create temporary directory
+	tmpDir := t.TempDir()
+
+	// Generate private key
+	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("failed to generate private key: %v", err)
+	}
+
+	// Create certificate template
+	template := x509.Certificate{
+		SerialNumber: big.NewInt(1),
+		Subject: pkix.Name{
+			Organization: []string{"Test Org"},
+			CommonName:   "localhost",
+		},
+		NotBefore:             time.Now(),
+		NotAfter:              time.Now().Add(24 * time.Hour),
+		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		BasicConstraintsValid: true,
+	}
+
+	// Create self-signed certificate
+	certDER, err := x509.CreateCertificate(rand.Reader, &template, &template, &privateKey.PublicKey, privateKey)
+	if err != nil {
+		t.Fatalf("failed to create certificate: %v", err)
+	}
+
+	// Write certificate to file
+	certPath = filepath.Join(tmpDir, "cert.pem")
+	certFile, err := os.Create(certPath)
+	if err != nil {
+		t.Fatalf("failed to create cert file: %v", err)
+	}
+	defer func() { _ = certFile.Close() }()
+
+	if err := pem.Encode(certFile, &pem.Block{Type: "CERTIFICATE", Bytes: certDER}); err != nil {
+		t.Fatalf("failed to encode certificate: %v", err)
+	}
+
+	// Write private key to file
+	keyPath = filepath.Join(tmpDir, "key.pem")
+	keyFile, err := os.Create(keyPath)
+	if err != nil {
+		t.Fatalf("failed to create key file: %v", err)
+	}
+	defer func() { _ = keyFile.Close() }()
+
+	privateKeyBytes := x509.MarshalPKCS1PrivateKey(privateKey)
+	if err := pem.Encode(keyFile, &pem.Block{Type: "RSA PRIVATE KEY", Bytes: privateKeyBytes}); err != nil {
+		t.Fatalf("failed to encode private key: %v", err)
+	}
+
+	return certPath, keyPath
+}
+
+func TestValidateFlagsWithTLS(t *testing.T) {
+	// Generate test certificates
+	certPath, keyPath := generateTestCertificates(t)
+
+	t.Run("valid tls configuration", func(t *testing.T) {
+		// Reset flags to defaults
+		port = 8080
+		timeout = 30 * time.Second
+		serviceName = "proxy"
+		logLevel = "info"
+		logFormat = "json"
+		logHeaders = false
+		tlsCertFile = certPath
+		tlsKeyFile = keyPath
+		upstreamTLSInsecure = false
+
+		// Run validation
+		err := validateFlags(nil, nil)
+
+		// Should not error with valid cert and key
+		if err != nil {
+			t.Errorf("unexpected error with valid TLS config: %v", err)
+		}
+	})
+
+	t.Run("valid tls with insecure flag", func(t *testing.T) {
+		// Reset flags to defaults
+		port = 8080
+		timeout = 30 * time.Second
+		serviceName = "proxy"
+		logLevel = "info"
+		logFormat = "json"
+		logHeaders = false
+		tlsCertFile = certPath
+		tlsKeyFile = keyPath
+		upstreamTLSInsecure = true
+
+		// Run validation
+		err := validateFlags(nil, nil)
+
+		// Should not error
+		if err != nil {
+			t.Errorf("unexpected error with valid TLS config and insecure flag: %v", err)
+		}
+	})
 }

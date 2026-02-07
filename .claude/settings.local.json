@@ -5,7 +5,9 @@
       "Bash(ls:*)",
       "Bash(helm template:*)",
       "Bash(go test:*)",
-      "Bash(make:*)"
+      "Bash(make:*)",
+      "Bash(nix develop:*)",
+      "Bash(git add:*)"
     ],
     "deny": []
   }

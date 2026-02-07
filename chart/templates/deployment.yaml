@@ -40,15 +40,44 @@ spec:
             - "--log-level={{ $serviceConfig.config.logLevel }}"
             - "--log-format={{ $serviceConfig.config.logFormat }}"
             - "--log-headers={{ $serviceConfig.config.logHeaders }}"
+            {{- if $serviceConfig.config.tls }}
+            {{- if or $serviceConfig.config.tls.existingSecret (and $serviceConfig.config.tls.cert $serviceConfig.config.tls.key) }}
+            - "--tls-cert=/etc/tls/tls.crt"
+            - "--tls-key=/etc/tls/tls.key"
+            {{- if $serviceConfig.config.tls.insecure }}
+            - "--upstream-tls-insecure"
+            {{- end }}
+            {{- end }}
+            {{- end }}
           ports:
             - name: http
               containerPort: {{ $serviceConfig.config.port }}
               protocol: TCP
+          {{- if $serviceConfig.config.tls }}
+          {{- if or $serviceConfig.config.tls.existingSecret (and $serviceConfig.config.tls.cert $serviceConfig.config.tls.key) }}
+          volumeMounts:
+            - name: tls-certs
+              mountPath: /etc/tls
+              readOnly: true
+          {{- end }}
+          {{- end }}
           livenessProbe:
             {{- toYaml $serviceConfig.livenessProbe | nindent 12 }}
           readinessProbe:
             {{- toYaml $serviceConfig.readinessProbe | nindent 12 }}
           resources:
             {{- toYaml $serviceConfig.resources | nindent 12 }}
+      {{- if $serviceConfig.config.tls }}
+      {{- if or $serviceConfig.config.tls.existingSecret (and $serviceConfig.config.tls.cert $serviceConfig.config.tls.key) }}
+      volumes:
+        - name: tls-certs
+          secret:
+            {{- if $serviceConfig.config.tls.existingSecret }}
+            secretName: {{ $serviceConfig.config.tls.existingSecret }}
+            {{- else }}
+            secretName: {{ include "microservice.serviceName" (dict "service" $service "root" $) }}-tls
+            {{- end }}
+      {{- end }}
+      {{- end }}
 ---
 {{- end }}
