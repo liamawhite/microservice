@@ -76,6 +76,8 @@ defaults:
     logLevel: "info"
     logFormat: "json"
     logHeaders: false
+    propagateRequestHeaders: true
+    propagateResponseHeaders: true
     # TLS configuration (optional)
     # tls:
     #   enabled: false

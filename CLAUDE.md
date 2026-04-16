@@ -401,6 +401,8 @@ The service uses [Cobra](https://github.com/spf13/cobra) for CLI argument parsin
 | `--tls-cert` | | string | "" | Path to TLS certificate file (enables HTTPS when provided with --tls-key) |
 | `--tls-key` | | string | "" | Path to TLS key file (enables HTTPS when provided with --tls-cert) |
 | `--upstream-tls-insecure` | | bool | false | Skip TLS verification for upstream requests (useful for self-signed certs) |
+| `--propagate-request-headers` | | bool | true | Propagate incoming request headers to upstream hops |
+| `--propagate-response-headers` | | bool | true | Propagate upstream response headers back to the client |
 
 ### Usage Examples
 

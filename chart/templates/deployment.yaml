@@ -40,6 +40,8 @@ spec:
             - "--log-level={{ $serviceConfig.config.logLevel }}"
             - "--log-format={{ $serviceConfig.config.logFormat }}"
             - "--log-headers={{ $serviceConfig.config.logHeaders }}"
+            - "--propagate-request-headers={{ $serviceConfig.config.propagateRequestHeaders }}"
+            - "--propagate-response-headers={{ $serviceConfig.config.propagateResponseHeaders }}"
             {{- if $serviceConfig.config.tls }}
             {{- if or $serviceConfig.config.tls.existingSecret (and $serviceConfig.config.tls.cert $serviceConfig.config.tls.key) }}
             - "--tls-cert=/etc/tls/tls.crt"
