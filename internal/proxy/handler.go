@@ -16,12 +16,14 @@ import (
 
 // Handler handles HTTP proxy requests
 type Handler struct {
-	client      *http.Client
-	timeout     time.Duration
-	serviceName string
-	logger      *slog.Logger
-	logHeaders  bool
-	tlsInsecure bool
+	client                  *http.Client
+	timeout                 time.Duration
+	serviceName             string
+	logger                  *slog.Logger
+	logHeaders              bool
+	tlsInsecure             bool
+	propagateRequestHeaders bool
+	propagateResponseHeaders bool
 }
 
 // Response represents the standard response format
@@ -48,6 +50,20 @@ func WithTLSInsecure(insecure bool) HandlerOption {
 	}
 }
 
+// WithPropagateRequestHeaders configures whether incoming request headers are forwarded to upstream hops
+func WithPropagateRequestHeaders(propagate bool) HandlerOption {
+	return func(h *Handler) {
+		h.propagateRequestHeaders = propagate
+	}
+}
+
+// WithPropagateResponseHeaders configures whether upstream response headers are forwarded to the client
+func WithPropagateResponseHeaders(propagate bool) HandlerOption {
+	return func(h *Handler) {
+		h.propagateResponseHeaders = propagate
+	}
+}
+
 // NewHandler creates a new proxy handler with structured logging
 func NewHandler(timeout time.Duration, serviceName string, logger *slog.Logger, opts ...HandlerOption) *Handler {
 	h := &Handler{
@@ -60,11 +76,13 @@ func NewHandler(timeout time.Duration, serviceName string, logger *slog.Logger, 
 				},
 			},
 		},
-		timeout:     timeout,
-		serviceName: serviceName,
-		logger:      logger,
-		logHeaders:  false,
-		tlsInsecure: false,
+		timeout:                  timeout,
+		serviceName:              serviceName,
+		logger:                   logger,
+		logHeaders:               false,
+		tlsInsecure:              false,
+		propagateRequestHeaders:  true,
+		propagateResponseHeaders: true,
 	}
 
 	// Apply options
@@ -374,6 +392,15 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Propagate incoming request headers to the next hop
+	if h.propagateRequestHeaders {
+		for k, v := range r.Header {
+			for _, val := range v {
+				nextReq.Header.Add(k, val)
+			}
+		}
+	}
+
 	forwardStartTime := time.Now()
 
 	// Forward to the next hop
@@ -461,10 +488,12 @@ func (h *Handler) forwardResponse(w http.ResponseWriter, resp *http.Response, lo
 
 	// Copy headers from downstream response
 	headerCount := 0
-	for k, v := range resp.Header {
-		for _, val := range v {
-			w.Header().Add(k, val)
-			headerCount++
+	if h.propagateResponseHeaders {
+		for k, v := range resp.Header {
+			for _, val := range v {
+				w.Header().Add(k, val)
+				headerCount++
+			}
 		}
 	}
 
