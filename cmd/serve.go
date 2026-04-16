@@ -8,7 +8,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/liamawhite/microservice/internal/proxy"
+	"github.com/liamawhite/microservice/pkg/proxy"
 	"github.com/spf13/cobra"
 )
 
