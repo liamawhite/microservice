@@ -17,11 +17,12 @@ import (
 
 // ServiceConfig represents the configuration for a single service
 type ServiceConfig struct {
-	Name     string
-	Port     string
-	TLS      bool
-	CertFile string
-	KeyFile  string
+	Name       string
+	Port       string
+	TLS        bool
+	CertFile   string
+	KeyFile    string
+	ExtraFlags []string
 }
 
 // ServiceResult represents a created service with its container and mapped port
@@ -73,12 +74,12 @@ func createServices(t *testing.T, ctx context.Context, nw *testcontainers.Docker
 				WaitingFor: wait.ForHTTP("/health").
 					WithPort(nat.Port(exposedPort)).
 					WithStartupTimeout(30 * time.Second),
-				Cmd: []string{
+				Cmd: append([]string{
 					"serve",
 					fmt.Sprintf("--port=%s", config.Port),
 					fmt.Sprintf("--service-name=%s", config.Name),
 					"--log-format=text",
-				},
+				}, config.ExtraFlags...),
 			}
 
 			container, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{

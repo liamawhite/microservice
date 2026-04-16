@@ -14,15 +14,17 @@ import (
 
 var (
 	// Flag variables for serve command
-	port                int
-	timeout             time.Duration
-	serviceName         string
-	logLevel            string
-	logFormat           string
-	logHeaders          bool
-	tlsCertFile         string
-	tlsKeyFile          string
-	upstreamTLSInsecure bool
+	port                     int
+	timeout                  time.Duration
+	serviceName              string
+	logLevel                 string
+	logFormat                string
+	logHeaders               bool
+	tlsCertFile              string
+	tlsKeyFile               string
+	upstreamTLSInsecure      bool
+	propagateRequestHeaders  bool
+	propagateResponseHeaders bool
 )
 
 // serveCmd represents the serve command
@@ -59,6 +61,8 @@ func init() {
 	serveCmd.Flags().StringVar(&tlsCertFile, "tls-cert", "", "Path to TLS certificate file (enables HTTPS when provided with --tls-key)")
 	serveCmd.Flags().StringVar(&tlsKeyFile, "tls-key", "", "Path to TLS key file (enables HTTPS when provided with --tls-cert)")
 	serveCmd.Flags().BoolVar(&upstreamTLSInsecure, "upstream-tls-insecure", false, "Skip TLS verification for upstream requests (useful for self-signed certs)")
+	serveCmd.Flags().BoolVar(&propagateRequestHeaders, "propagate-request-headers", true, "Propagate incoming request headers to upstream hops")
+	serveCmd.Flags().BoolVar(&propagateResponseHeaders, "propagate-response-headers", true, "Propagate upstream response headers back to the client")
 }
 
 // validateFlags validates all flag values before starting the server
@@ -134,11 +138,15 @@ func runServer(cmd *cobra.Command, args []string) error {
 		slog.Bool("log_headers", logHeaders),
 		slog.Bool("tls_enabled", tlsEnabled),
 		slog.Bool("upstream_tls_insecure", upstreamTLSInsecure),
+		slog.Bool("propagate_request_headers", propagateRequestHeaders),
+		slog.Bool("propagate_response_headers", propagateResponseHeaders),
 	)
 
 	handler := proxy.NewHandler(timeout, serviceName, logger,
 		proxy.WithHeaderLogging(logHeaders),
-		proxy.WithTLSInsecure(upstreamTLSInsecure))
+		proxy.WithTLSInsecure(upstreamTLSInsecure),
+		proxy.WithPropagateRequestHeaders(propagateRequestHeaders),
+		proxy.WithPropagateResponseHeaders(propagateResponseHeaders))
 
 	mux := http.NewServeMux()
 	mux.Handle("/", handler)

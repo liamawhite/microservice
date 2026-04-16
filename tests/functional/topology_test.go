@@ -82,6 +82,93 @@ func TestProxyChainWithMultipleServices(t *testing.T) {
 
 }
 
+func TestHeaderPropagation(t *testing.T) {
+	ctx := context.Background()
+	nw := createTestNetwork(t, ctx)
+
+	// When service-a proxies service-b, service-b sets Content-Type: application/json.
+	// With propagation on (default), service-a copies that header to its response.
+	// With propagation off, service-a doesn't copy headers; Go's HTTP server then
+	// sniffs the JSON body and sets Content-Type: text/plain; charset=utf-8.
+	// This gives a reliable signal to distinguish the two modes.
+
+	t.Run("response_headers_propagated_by_default", func(t *testing.T) {
+		serviceConfigs := []ServiceConfig{
+			{Name: "hdr-a1", Port: "8080"},
+			{Name: "hdr-b1", Port: "8080"},
+		}
+		services := createServices(t, ctx, nw, serviceConfigs)
+
+		url := fmt.Sprintf("http://localhost:%s/proxy/%s:%s",
+			services[0].Port, services[1].Name, serviceConfigs[1].Port)
+		resp, err := http.Get(url)
+		require.NoError(t, err)
+		defer func() { _ = resp.Body.Close() }()
+
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		assert.Equal(t, "application/json", resp.Header.Get("Content-Type"),
+			"Response headers from upstream should be propagated by default")
+	})
+
+	t.Run("response_headers_disabled", func(t *testing.T) {
+		serviceConfigs := []ServiceConfig{
+			{Name: "hdr-a2", Port: "8080", ExtraFlags: []string{"--propagate-response-headers=false"}},
+			{Name: "hdr-b2", Port: "8080"},
+		}
+		services := createServices(t, ctx, nw, serviceConfigs)
+
+		url := fmt.Sprintf("http://localhost:%s/proxy/%s:%s",
+			services[0].Port, services[1].Name, serviceConfigs[1].Port)
+		resp, err := http.Get(url)
+		require.NoError(t, err)
+		defer func() { _ = resp.Body.Close() }()
+
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		assert.NotEqual(t, "application/json", resp.Header.Get("Content-Type"),
+			"Upstream response headers should be dropped when propagation is disabled")
+	})
+
+	t.Run("request_headers_propagated_by_default", func(t *testing.T) {
+		serviceConfigs := []ServiceConfig{
+			{Name: "hdr-a3", Port: "8080"},
+			{Name: "hdr-b3", Port: "8080"},
+		}
+		services := createServices(t, ctx, nw, serviceConfigs)
+
+		url := fmt.Sprintf("http://localhost:%s/proxy/%s:%s",
+			services[0].Port, services[1].Name, serviceConfigs[1].Port)
+		req, err := http.NewRequest(http.MethodGet, url, nil)
+		require.NoError(t, err)
+		req.Header.Set("X-Test-Header", "test-value")
+
+		resp, err := http.DefaultClient.Do(req)
+		require.NoError(t, err)
+		defer func() { _ = resp.Body.Close() }()
+
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+	})
+
+	t.Run("request_headers_disabled", func(t *testing.T) {
+		serviceConfigs := []ServiceConfig{
+			{Name: "hdr-a4", Port: "8080", ExtraFlags: []string{"--propagate-request-headers=false"}},
+			{Name: "hdr-b4", Port: "8080"},
+		}
+		services := createServices(t, ctx, nw, serviceConfigs)
+
+		url := fmt.Sprintf("http://localhost:%s/proxy/%s:%s",
+			services[0].Port, services[1].Name, serviceConfigs[1].Port)
+		req, err := http.NewRequest(http.MethodGet, url, nil)
+		require.NoError(t, err)
+		req.Header.Set("X-Test-Header", "test-value")
+
+		resp, err := http.DefaultClient.Do(req)
+		require.NoError(t, err)
+		defer func() { _ = resp.Body.Close() }()
+
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+	})
+}
+
 func TestFaultInjection(t *testing.T) {
 	ctx := context.Background()
 

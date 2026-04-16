@@ -1,9 +1,13 @@
 package proxy
 
 import (
+	"fmt"
 	"log/slog"
 	"net/http"
+	"net/http/httptest"
 	"os"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -606,4 +610,143 @@ func TestDefaultTLSInsecure(t *testing.T) {
 	// Handler created without WithTLSInsecure option should have tlsInsecure=false by default
 	handler := NewHandler(30*time.Second, "test-service", logger)
 	assert.False(t, handler.tlsInsecure, "Default tlsInsecure should be false")
+}
+
+func TestDefaultHeaderPropagation(t *testing.T) {
+	logger := createTestLogger()
+	handler := NewHandler(30*time.Second, "test-service", logger)
+	assert.True(t, handler.propagateRequestHeaders, "Default propagateRequestHeaders should be true")
+	assert.True(t, handler.propagateResponseHeaders, "Default propagateResponseHeaders should be true")
+}
+
+func TestWithPropagateRequestHeaders(t *testing.T) {
+	logger := createTestLogger()
+
+	handler := NewHandler(30*time.Second, "test-service", logger, WithPropagateRequestHeaders(true))
+	assert.True(t, handler.propagateRequestHeaders)
+
+	handler = NewHandler(30*time.Second, "test-service", logger, WithPropagateRequestHeaders(false))
+	assert.False(t, handler.propagateRequestHeaders)
+}
+
+func TestWithPropagateResponseHeaders(t *testing.T) {
+	logger := createTestLogger()
+
+	handler := NewHandler(30*time.Second, "test-service", logger, WithPropagateResponseHeaders(true))
+	assert.True(t, handler.propagateResponseHeaders)
+
+	handler = NewHandler(30*time.Second, "test-service", logger, WithPropagateResponseHeaders(false))
+	assert.False(t, handler.propagateResponseHeaders)
+}
+
+func TestRequestHeaderPropagation(t *testing.T) {
+	var (
+		mu            sync.Mutex
+		receivedValue string
+	)
+
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		receivedValue = r.Header.Get("X-Test-Header")
+		mu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = fmt.Fprintf(w, `{"status":200,"service":"upstream","message":"ok"}`)
+	}))
+	defer upstream.Close()
+
+	upstreamAddr := strings.TrimPrefix(upstream.URL, "http://")
+
+	tests := []struct {
+		name      string
+		propagate bool
+		wantValue string
+	}{
+		{
+			name:      "propagation enabled - header forwarded to upstream",
+			propagate: true,
+			wantValue: "test-value",
+		},
+		{
+			name:      "propagation disabled - header dropped",
+			propagate: false,
+			wantValue: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mu.Lock()
+			receivedValue = ""
+			mu.Unlock()
+
+			logger := createTestLogger()
+			handler := NewHandler(30*time.Second, "test-service", logger,
+				WithPropagateRequestHeaders(tt.propagate))
+
+			req := httptest.NewRequest(http.MethodGet, "/proxy/"+upstreamAddr+"/", nil)
+			req.Header.Set("X-Test-Header", "test-value")
+			rr := httptest.NewRecorder()
+
+			handler.ServeHTTP(rr, req)
+
+			assert.Equal(t, http.StatusOK, rr.Code)
+
+			mu.Lock()
+			got := receivedValue
+			mu.Unlock()
+			assert.Equal(t, tt.wantValue, got)
+		})
+	}
+}
+
+func TestResponseHeaderPropagation(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Upstream-Header", "upstream-value")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = fmt.Fprintf(w, `{"status":200,"service":"upstream","message":"ok"}`)
+	}))
+	defer upstream.Close()
+
+	upstreamAddr := strings.TrimPrefix(upstream.URL, "http://")
+
+	tests := []struct {
+		name       string
+		propagate  bool
+		wantHeader bool
+	}{
+		{
+			name:       "propagation enabled - upstream headers returned to client",
+			propagate:  true,
+			wantHeader: true,
+		},
+		{
+			name:       "propagation disabled - upstream headers dropped",
+			propagate:  false,
+			wantHeader: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			logger := createTestLogger()
+			handler := NewHandler(30*time.Second, "test-service", logger,
+				WithPropagateResponseHeaders(tt.propagate))
+
+			req := httptest.NewRequest(http.MethodGet, "/proxy/"+upstreamAddr+"/", nil)
+			rr := httptest.NewRecorder()
+
+			handler.ServeHTTP(rr, req)
+
+			assert.Equal(t, http.StatusOK, rr.Code)
+			if tt.wantHeader {
+				assert.Equal(t, "upstream-value", rr.Header().Get("X-Upstream-Header"),
+					"Upstream header should be present in response")
+			} else {
+				assert.Empty(t, rr.Header().Get("X-Upstream-Header"),
+					"Upstream header should not be present in response")
+			}
+		})
+	}
 }
