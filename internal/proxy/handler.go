@@ -16,13 +16,13 @@ import (
 
 // Handler handles HTTP proxy requests
 type Handler struct {
-	client                  *http.Client
-	timeout                 time.Duration
-	serviceName             string
-	logger                  *slog.Logger
-	logHeaders              bool
-	tlsInsecure             bool
-	propagateRequestHeaders bool
+	client                   *http.Client
+	timeout                  time.Duration
+	serviceName              string
+	logger                   *slog.Logger
+	logHeaders               bool
+	tlsInsecure              bool
+	propagateRequestHeaders  bool
 	propagateResponseHeaders bool
 }
 
