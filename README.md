@@ -128,6 +128,8 @@ curl http://localhost:8080/health
 | `--tls-cert` | | "" | Path to TLS certificate (enables HTTPS with --tls-key) |
 | `--tls-key` | | "" | Path to TLS key file (enables HTTPS with --tls-cert) |
 | `--upstream-tls-insecure` | | false | Skip TLS verification for upstream HTTPS requests |
+| `--propagate-request-headers` | | true | Propagate incoming request headers to upstream hops |
+| `--propagate-response-headers` | | true | Propagate upstream response headers back to the client |
 
 ### CLI Help and Version
 

@@ -115,6 +115,8 @@ services:
 | `defaults.config.logLevel` | Log level | `"info"` |
 | `defaults.config.logFormat` | Log format | `"json"` |
 | `defaults.config.logHeaders` | Log request/response headers | `false` |
+| `defaults.config.propagateRequestHeaders` | Propagate request headers to upstream hops | `true` |
+| `defaults.config.propagateResponseHeaders` | Propagate response headers back to client | `true` |
 | `defaults.config.tls.existingSecret` | Existing TLS secret name | `""` |
 | `defaults.config.tls.cert` | TLS certificate (base64) | `""` |
 | `defaults.config.tls.key` | TLS private key (base64) | `""` |
