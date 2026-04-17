@@ -125,7 +125,7 @@ func validateFlags(cmd *cobra.Command, args []string) error {
 	// Validate additional CA cert files
 	for _, caFile := range upstreamCACerts {
 		if _, err := os.Stat(caFile); err != nil {
-			return fmt.Errorf("CA cert file not found %q: %w", caFile, err)
+			return fmt.Errorf("cannot access CA cert file %q: %w", caFile, err)
 		}
 		pemBytes, err := os.ReadFile(filepath.Clean(caFile))
 		if err != nil {

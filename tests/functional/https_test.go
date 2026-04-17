@@ -30,6 +30,7 @@ import (
 // Returns paths to the CA cert PEM, server cert PEM, and server key PEM.
 func generateCAAndSignedCerts(t *testing.T, dnsNames []string) (caPath, certPath, keyPath string) {
 	t.Helper()
+	require.NotEmpty(t, dnsNames, "dnsNames must not be empty")
 	tmpDir := t.TempDir()
 
 	// Generate CA key pair

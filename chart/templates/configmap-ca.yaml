@@ -15,7 +15,8 @@ metadata:
   labels:
     {{- include "microservice.serviceLabels" (dict "service" $service "root" $) | nindent 4 }}
 data:
-  ca.crt: {{ $caCert.cert | b64dec }}
+  ca.crt: |
+{{ $caCert.cert | b64dec | indent 4 }}
 {{- end }}
 {{- end }}
 {{- end }}
