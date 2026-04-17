@@ -250,7 +250,7 @@ func TestValidateFlags(t *testing.T) {
 				upstreamCACerts = []string{"/nonexistent/ca.pem"}
 			},
 			expectError: true,
-			errorMsg:    "CA cert file not found",
+			errorMsg:    "cannot access CA cert file",
 		},
 	}
 
