@@ -25,6 +25,75 @@ import (
 	"github.com/testcontainers/testcontainers-go/wait"
 )
 
+// generateCAAndSignedCerts creates a CA key pair and a server cert signed by that CA.
+// dnsNames are included as SANs in the server cert so TLS hostname verification passes.
+// Returns paths to the CA cert PEM, server cert PEM, and server key PEM.
+func generateCAAndSignedCerts(t *testing.T, dnsNames []string) (caPath, certPath, keyPath string) {
+	t.Helper()
+	require.NotEmpty(t, dnsNames, "dnsNames must not be empty")
+	tmpDir := t.TempDir()
+
+	// Generate CA key pair
+	caKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+
+	caTemplate := x509.Certificate{
+		SerialNumber:          big.NewInt(1),
+		Subject:               pkix.Name{CommonName: "Test CA"},
+		NotBefore:             time.Now(),
+		NotAfter:              time.Now().Add(24 * time.Hour),
+		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
+		BasicConstraintsValid: true,
+		IsCA:                  true,
+	}
+
+	caDER, err := x509.CreateCertificate(rand.Reader, &caTemplate, &caTemplate, &caKey.PublicKey, caKey)
+	require.NoError(t, err)
+
+	caCert, err := x509.ParseCertificate(caDER)
+	require.NoError(t, err)
+
+	caPath = filepath.Join(tmpDir, "ca.pem")
+	caFile, err := os.Create(caPath)
+	require.NoError(t, err)
+	err = pem.Encode(caFile, &pem.Block{Type: "CERTIFICATE", Bytes: caDER})
+	require.NoError(t, err)
+	_ = caFile.Close()
+
+	// Generate server key pair signed by CA
+	serverKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+
+	serverTemplate := x509.Certificate{
+		SerialNumber: big.NewInt(2),
+		Subject:      pkix.Name{CommonName: dnsNames[0]},
+		NotBefore:    time.Now(),
+		NotAfter:     time.Now().Add(24 * time.Hour),
+		KeyUsage:     x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		DNSNames:     dnsNames,
+	}
+
+	serverDER, err := x509.CreateCertificate(rand.Reader, &serverTemplate, caCert, &serverKey.PublicKey, caKey)
+	require.NoError(t, err)
+
+	certPath = filepath.Join(tmpDir, "cert.pem")
+	certFile, err := os.Create(certPath)
+	require.NoError(t, err)
+	err = pem.Encode(certFile, &pem.Block{Type: "CERTIFICATE", Bytes: serverDER})
+	require.NoError(t, err)
+	_ = certFile.Close()
+
+	keyPath = filepath.Join(tmpDir, "key.pem")
+	keyFile, err := os.Create(keyPath)
+	require.NoError(t, err)
+	err = pem.Encode(keyFile, &pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(serverKey)})
+	require.NoError(t, err)
+	_ = keyFile.Close()
+
+	return caPath, certPath, keyPath
+}
+
 // generateTestCertificates creates a self-signed certificate for testing
 func generateTestCertificates(t *testing.T) (certPath, keyPath string) {
 	t.Helper()
@@ -414,5 +483,178 @@ func TestAutoSchemeDetection(t *testing.T) {
 
 		assert.Equal(t, "healthy", response["status"])
 		assert.Equal(t, "auto-service", response["service"])
+	})
+}
+
+func TestCustomCABundle(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping functional test in short mode")
+	}
+
+	ctx := context.Background()
+	nw := createTestNetwork(t, ctx)
+
+	// Generate a CA and a server cert signed by it, with the upstream's DNS alias as a SAN.
+	caPath, certPath, keyPath := generateCAAndSignedCerts(t, []string{"upstream-service"})
+
+	containerCertPath := "/tmp/cert.pem"
+	containerKeyPath := "/tmp/key.pem"
+	containerCAPath := "/tmp/ca.pem"
+	upstreamPort := "8443"
+	upstreamExposedPort := upstreamPort + "/tcp"
+
+	// Start the upstream HTTPS service using the CA-signed cert.
+	upstreamReq := testcontainers.ContainerRequest{
+		FromDockerfile: testcontainers.FromDockerfile{
+			Context:    "../..",
+			Dockerfile: "Dockerfile",
+		},
+		ExposedPorts: []string{upstreamExposedPort},
+		Networks:     []string{nw.Name},
+		NetworkAliases: map[string][]string{
+			nw.Name: {"upstream-service"},
+		},
+		Files: []testcontainers.ContainerFile{
+			{HostFilePath: certPath, ContainerFilePath: containerCertPath, FileMode: 0644},
+			{HostFilePath: keyPath, ContainerFilePath: containerKeyPath, FileMode: 0644},
+		},
+		WaitingFor: wait.ForHTTP("/health").
+			WithPort(nat.Port(upstreamExposedPort)).
+			WithTLS(true, &tls.Config{InsecureSkipVerify: true}).
+			WithStartupTimeout(30 * time.Second),
+		Cmd: []string{
+			"serve",
+			fmt.Sprintf("--port=%s", upstreamPort),
+			"--service-name=upstream-service",
+			"--log-format=text",
+			fmt.Sprintf("--tls-cert=%s", containerCertPath),
+			fmt.Sprintf("--tls-key=%s", containerKeyPath),
+		},
+	}
+
+	upstream, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
+		ContainerRequest: upstreamReq,
+		Started:          true,
+	})
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		if t.Failed() {
+			dumpContainerLogs(t, ctx, upstream, "upstream-service")
+		}
+		_ = upstream.Terminate(ctx)
+	})
+
+	// Sub-test: proxy with --additional-ca-cert trusts the upstream's CA.
+	t.Run("with_custom_ca", func(t *testing.T) {
+		proxyExposedPort := "8080/tcp"
+		proxyReq := testcontainers.ContainerRequest{
+			FromDockerfile: testcontainers.FromDockerfile{
+				Context:    "../..",
+				Dockerfile: "Dockerfile",
+			},
+			ExposedPorts: []string{proxyExposedPort},
+			Networks:     []string{nw.Name},
+			NetworkAliases: map[string][]string{
+				nw.Name: {"proxy-with-ca"},
+			},
+			Files: []testcontainers.ContainerFile{
+				{HostFilePath: caPath, ContainerFilePath: containerCAPath, FileMode: 0644},
+			},
+			WaitingFor: wait.ForHTTP("/health").
+				WithPort(nat.Port(proxyExposedPort)).
+				WithStartupTimeout(30 * time.Second),
+			Cmd: []string{
+				"serve",
+				"--port=8080",
+				"--service-name=proxy-with-ca",
+				"--log-format=text",
+				fmt.Sprintf("--additional-ca-cert=%s", containerCAPath),
+			},
+		}
+
+		proxy, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
+			ContainerRequest: proxyReq,
+			Started:          true,
+		})
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			if t.Failed() {
+				dumpContainerLogs(t, ctx, proxy, "proxy-with-ca")
+			}
+			_ = proxy.Terminate(ctx)
+		})
+
+		mappedPort, err := proxy.MappedPort(ctx, nat.Port(proxyExposedPort))
+		require.NoError(t, err)
+
+		client := &http.Client{Timeout: 30 * time.Second}
+		url := fmt.Sprintf("http://localhost:%s/proxy/https://upstream-service:%s", mappedPort.Port(), upstreamPort)
+
+		resp, err := client.Get(url)
+		require.NoError(t, err)
+		defer func() { _ = resp.Body.Close() }()
+
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+		body, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+
+		var response map[string]any
+		err = json.Unmarshal(body, &response)
+		require.NoError(t, err)
+
+		assert.Equal(t, "upstream-service", response["service"])
+		assert.Equal(t, float64(200), response["status"])
+	})
+
+	// Sub-test: proxy without --additional-ca-cert (and without --upstream-tls-insecure)
+	// cannot verify the upstream's self-signed CA and returns 502.
+	t.Run("without_custom_ca", func(t *testing.T) {
+		proxyExposedPort := "8080/tcp"
+		proxyReq := testcontainers.ContainerRequest{
+			FromDockerfile: testcontainers.FromDockerfile{
+				Context:    "../..",
+				Dockerfile: "Dockerfile",
+			},
+			ExposedPorts: []string{proxyExposedPort},
+			Networks:     []string{nw.Name},
+			NetworkAliases: map[string][]string{
+				nw.Name: {"proxy-without-ca"},
+			},
+			WaitingFor: wait.ForHTTP("/health").
+				WithPort(nat.Port(proxyExposedPort)).
+				WithStartupTimeout(30 * time.Second),
+			Cmd: []string{
+				"serve",
+				"--port=8080",
+				"--service-name=proxy-without-ca",
+				"--log-format=text",
+			},
+		}
+
+		proxy, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
+			ContainerRequest: proxyReq,
+			Started:          true,
+		})
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			if t.Failed() {
+				dumpContainerLogs(t, ctx, proxy, "proxy-without-ca")
+			}
+			_ = proxy.Terminate(ctx)
+		})
+
+		mappedPort, err := proxy.MappedPort(ctx, nat.Port(proxyExposedPort))
+		require.NoError(t, err)
+
+		client := &http.Client{Timeout: 30 * time.Second}
+		url := fmt.Sprintf("http://localhost:%s/proxy/https://upstream-service:%s", mappedPort.Port(), upstreamPort)
+
+		resp, err := client.Get(url)
+		require.NoError(t, err)
+		defer func() { _ = resp.Body.Close() }()
+
+		// Without trusting the CA, TLS verification fails and we expect a 502 Bad Gateway.
+		assert.Equal(t, http.StatusBadGateway, resp.StatusCode)
 	})
 }

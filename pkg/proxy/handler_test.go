@@ -1,11 +1,18 @@
 package proxy
 
 import (
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/pem"
 	"fmt"
 	"log/slog"
+	"math/big"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -300,7 +307,8 @@ func TestNewHandler(t *testing.T) {
 	timeout := 30 * time.Second
 	serviceName := "test-service"
 
-	handler := NewHandler(timeout, serviceName, logger)
+	handler, err := NewHandler(timeout, serviceName, logger)
+	require.NoError(t, err)
 
 	assert.NotNil(t, handler)
 	assert.NotNil(t, handler.client)
@@ -312,7 +320,8 @@ func TestNewHandler(t *testing.T) {
 
 func TestSendFaultResponse(t *testing.T) {
 	logger := createTestLogger()
-	handler := NewHandler(30*time.Second, "test-service", logger)
+	handler, err := NewHandler(30*time.Second, "test-service", logger)
+	require.NoError(t, err)
 
 	tests := []struct {
 		name           string
@@ -443,7 +452,8 @@ func TestHeaderLogging(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			handler := NewHandler(30*time.Second, "test-service", logger, WithHeaderLogging(tt.logHeaders))
+			handler, err := NewHandler(30*time.Second, "test-service", logger, WithHeaderLogging(tt.logHeaders))
+			require.NoError(t, err)
 
 			// Test the headersToLogAttrs method
 			attr := handler.headersToLogAttrs(tt.inputHeaders, "test_headers")
@@ -462,7 +472,8 @@ func TestHeaderLogging(t *testing.T) {
 
 func TestHeaderRedaction(t *testing.T) {
 	logger := createTestLogger()
-	handler := NewHandler(30*time.Second, "test-service", logger, WithHeaderLogging(true))
+	handler, err := NewHandler(30*time.Second, "test-service", logger, WithHeaderLogging(true))
+	require.NoError(t, err)
 
 	tests := []struct {
 		name         string
@@ -553,7 +564,8 @@ func TestWithHeaderLogging(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			handler := NewHandler(30*time.Second, "test-service", logger, WithHeaderLogging(tt.enabled))
+			handler, err := NewHandler(30*time.Second, "test-service", logger, WithHeaderLogging(tt.enabled))
+			require.NoError(t, err)
 			assert.Equal(t, tt.wantEnabled, handler.logHeaders)
 		})
 	}
@@ -563,7 +575,8 @@ func TestDefaultHeaderLogging(t *testing.T) {
 	logger := createTestLogger()
 
 	// Handler created without WithHeaderLogging option should have logHeaders=false by default
-	handler := NewHandler(30*time.Second, "test-service", logger)
+	handler, err := NewHandler(30*time.Second, "test-service", logger)
+	require.NoError(t, err)
 	assert.False(t, handler.logHeaders, "Default logHeaders should be false")
 }
 
@@ -571,7 +584,8 @@ func TestTLSInsecureOption(t *testing.T) {
 	logger := createTestLogger()
 
 	t.Run("tls insecure disabled by default", func(t *testing.T) {
-		handler := NewHandler(30*time.Second, "test-service", logger)
+		handler, err := NewHandler(30*time.Second, "test-service", logger)
+		require.NoError(t, err)
 		assert.False(t, handler.tlsInsecure)
 
 		// Check that the HTTP transport has InsecureSkipVerify set to false
@@ -582,7 +596,8 @@ func TestTLSInsecureOption(t *testing.T) {
 	})
 
 	t.Run("tls insecure enabled", func(t *testing.T) {
-		handler := NewHandler(30*time.Second, "test-service", logger, WithTLSInsecure(true))
+		handler, err := NewHandler(30*time.Second, "test-service", logger, WithTLSInsecure(true))
+		require.NoError(t, err)
 		assert.True(t, handler.tlsInsecure)
 
 		// Check that the HTTP transport has InsecureSkipVerify set to true
@@ -593,7 +608,8 @@ func TestTLSInsecureOption(t *testing.T) {
 	})
 
 	t.Run("tls insecure explicitly disabled", func(t *testing.T) {
-		handler := NewHandler(30*time.Second, "test-service", logger, WithTLSInsecure(false))
+		handler, err := NewHandler(30*time.Second, "test-service", logger, WithTLSInsecure(false))
+		require.NoError(t, err)
 		assert.False(t, handler.tlsInsecure)
 
 		// Check that the HTTP transport has InsecureSkipVerify set to false
@@ -608,13 +624,15 @@ func TestDefaultTLSInsecure(t *testing.T) {
 	logger := createTestLogger()
 
 	// Handler created without WithTLSInsecure option should have tlsInsecure=false by default
-	handler := NewHandler(30*time.Second, "test-service", logger)
+	handler, err := NewHandler(30*time.Second, "test-service", logger)
+	require.NoError(t, err)
 	assert.False(t, handler.tlsInsecure, "Default tlsInsecure should be false")
 }
 
 func TestDefaultHeaderPropagation(t *testing.T) {
 	logger := createTestLogger()
-	handler := NewHandler(30*time.Second, "test-service", logger)
+	handler, err := NewHandler(30*time.Second, "test-service", logger)
+	require.NoError(t, err)
 	assert.True(t, handler.propagateRequestHeaders, "Default propagateRequestHeaders should be true")
 	assert.True(t, handler.propagateResponseHeaders, "Default propagateResponseHeaders should be true")
 }
@@ -622,20 +640,24 @@ func TestDefaultHeaderPropagation(t *testing.T) {
 func TestWithPropagateRequestHeaders(t *testing.T) {
 	logger := createTestLogger()
 
-	handler := NewHandler(30*time.Second, "test-service", logger, WithPropagateRequestHeaders(true))
+	handler, err := NewHandler(30*time.Second, "test-service", logger, WithPropagateRequestHeaders(true))
+	require.NoError(t, err)
 	assert.True(t, handler.propagateRequestHeaders)
 
-	handler = NewHandler(30*time.Second, "test-service", logger, WithPropagateRequestHeaders(false))
+	handler, err = NewHandler(30*time.Second, "test-service", logger, WithPropagateRequestHeaders(false))
+	require.NoError(t, err)
 	assert.False(t, handler.propagateRequestHeaders)
 }
 
 func TestWithPropagateResponseHeaders(t *testing.T) {
 	logger := createTestLogger()
 
-	handler := NewHandler(30*time.Second, "test-service", logger, WithPropagateResponseHeaders(true))
+	handler, err := NewHandler(30*time.Second, "test-service", logger, WithPropagateResponseHeaders(true))
+	require.NoError(t, err)
 	assert.True(t, handler.propagateResponseHeaders)
 
-	handler = NewHandler(30*time.Second, "test-service", logger, WithPropagateResponseHeaders(false))
+	handler, err = NewHandler(30*time.Second, "test-service", logger, WithPropagateResponseHeaders(false))
+	require.NoError(t, err)
 	assert.False(t, handler.propagateResponseHeaders)
 }
 
@@ -681,8 +703,9 @@ func TestRequestHeaderPropagation(t *testing.T) {
 			mu.Unlock()
 
 			logger := createTestLogger()
-			handler := NewHandler(30*time.Second, "test-service", logger,
+			handler, err := NewHandler(30*time.Second, "test-service", logger,
 				WithPropagateRequestHeaders(tt.propagate))
+			require.NoError(t, err)
 
 			req := httptest.NewRequest(http.MethodGet, "/proxy/"+upstreamAddr+"/", nil)
 			req.Header.Set("X-Test-Header", "test-value")
@@ -731,8 +754,9 @@ func TestResponseHeaderPropagation(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			logger := createTestLogger()
-			handler := NewHandler(30*time.Second, "test-service", logger,
+			handler, err := NewHandler(30*time.Second, "test-service", logger,
 				WithPropagateResponseHeaders(tt.propagate))
+			require.NoError(t, err)
 
 			req := httptest.NewRequest(http.MethodGet, "/proxy/"+upstreamAddr+"/", nil)
 			rr := httptest.NewRecorder()
@@ -749,4 +773,89 @@ func TestResponseHeaderPropagation(t *testing.T) {
 			}
 		})
 	}
+}
+
+// generateTestCACert creates a self-signed CA certificate and returns the PEM file path.
+func generateTestCACert(t *testing.T) string {
+	t.Helper()
+
+	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+
+	template := x509.Certificate{
+		SerialNumber:          big.NewInt(1),
+		Subject:               pkix.Name{CommonName: "Test CA"},
+		NotBefore:             time.Now(),
+		NotAfter:              time.Now().Add(24 * time.Hour),
+		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
+		BasicConstraintsValid: true,
+		IsCA:                  true,
+	}
+
+	certDER, err := x509.CreateCertificate(rand.Reader, &template, &template, &privateKey.PublicKey, privateKey)
+	require.NoError(t, err)
+
+	caPath := filepath.Join(t.TempDir(), "ca.pem")
+	f, err := os.Create(caPath)
+	require.NoError(t, err)
+	defer func() { _ = f.Close() }()
+
+	err = pem.Encode(f, &pem.Block{Type: "CERTIFICATE", Bytes: certDER})
+	require.NoError(t, err)
+
+	return caPath
+}
+
+func TestWithCACertFiles(t *testing.T) {
+	logger := createTestLogger()
+
+	t.Run("valid CA cert - no error, RootCAs set", func(t *testing.T) {
+		caPath := generateTestCACert(t)
+
+		handler, err := NewHandler(30*time.Second, "test-service", logger, WithCACertFiles([]string{caPath}))
+		require.NoError(t, err)
+		require.NotNil(t, handler)
+
+		transport, ok := handler.client.Transport.(*http.Transport)
+		require.True(t, ok)
+		assert.NotNil(t, transport.TLSClientConfig.RootCAs, "RootCAs should be set when CA certs provided")
+	})
+
+	t.Run("no CA certs - RootCAs nil (uses system pool)", func(t *testing.T) {
+		handler, err := NewHandler(30*time.Second, "test-service", logger)
+		require.NoError(t, err)
+
+		transport, ok := handler.client.Transport.(*http.Transport)
+		require.True(t, ok)
+		assert.Nil(t, transport.TLSClientConfig.RootCAs, "RootCAs should be nil when no CA certs provided")
+	})
+
+	t.Run("non-existent file - error returned", func(t *testing.T) {
+		_, err := NewHandler(30*time.Second, "test-service", logger, WithCACertFiles([]string{"/nonexistent/ca.pem"}))
+		require.Error(t, err)
+	})
+
+	t.Run("file with no valid certs - error returned", func(t *testing.T) {
+		f, err := os.CreateTemp(t.TempDir(), "bad-ca-*.pem")
+		require.NoError(t, err)
+		_, err = f.WriteString("this is not a valid PEM certificate")
+		require.NoError(t, err)
+		_ = f.Close()
+
+		_, err = NewHandler(30*time.Second, "test-service", logger, WithCACertFiles([]string{f.Name()}))
+		require.Error(t, err)
+	})
+
+	t.Run("multiple valid CA certs", func(t *testing.T) {
+		caPath1 := generateTestCACert(t)
+		caPath2 := generateTestCACert(t)
+
+		handler, err := NewHandler(30*time.Second, "test-service", logger, WithCACertFiles([]string{caPath1, caPath2}))
+		require.NoError(t, err)
+		require.NotNil(t, handler)
+
+		transport, ok := handler.client.Transport.(*http.Transport)
+		require.True(t, ok)
+		assert.NotNil(t, transport.TLSClientConfig.RootCAs)
+	})
 }

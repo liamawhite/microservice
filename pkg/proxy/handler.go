@@ -3,12 +3,15 @@ package proxy
 import (
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
 	"math/rand"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -22,6 +25,7 @@ type Handler struct {
 	logger                   *slog.Logger
 	logHeaders               bool
 	tlsInsecure              bool
+	caCertFiles              []string
 	propagateRequestHeaders  bool
 	propagateResponseHeaders bool
 }
@@ -50,6 +54,15 @@ func WithTLSInsecure(insecure bool) HandlerOption {
 	}
 }
 
+// WithCACertFiles appends the given PEM CA certificate files to the system trust pool
+// for upstream TLS verification. Returns an error from NewHandler if any file cannot
+// be read or contains no valid certificates.
+func WithCACertFiles(files []string) HandlerOption {
+	return func(h *Handler) {
+		h.caCertFiles = files
+	}
+}
+
 // WithPropagateRequestHeaders configures whether incoming request headers are forwarded to upstream hops
 func WithPropagateRequestHeaders(propagate bool) HandlerOption {
 	return func(h *Handler) {
@@ -65,7 +78,7 @@ func WithPropagateResponseHeaders(propagate bool) HandlerOption {
 }
 
 // NewHandler creates a new proxy handler with structured logging
-func NewHandler(timeout time.Duration, serviceName string, logger *slog.Logger, opts ...HandlerOption) *Handler {
+func NewHandler(timeout time.Duration, serviceName string, logger *slog.Logger, opts ...HandlerOption) (*Handler, error) {
 	h := &Handler{
 		client: &http.Client{
 			Timeout: timeout,
@@ -95,7 +108,26 @@ func NewHandler(timeout time.Duration, serviceName string, logger *slog.Logger, 
 		h.client.Transport.(*http.Transport).TLSClientConfig.InsecureSkipVerify = true
 	}
 
-	return h
+	// Build augmented CA cert pool if additional certs were provided
+	if len(h.caCertFiles) > 0 {
+		pool, err := x509.SystemCertPool()
+		if err != nil {
+			// SystemCertPool can fail on some platforms (e.g. Windows); fall back to empty pool
+			pool = x509.NewCertPool()
+		}
+		for _, f := range h.caCertFiles {
+			pem, err := os.ReadFile(filepath.Clean(f))
+			if err != nil {
+				return nil, fmt.Errorf("reading CA cert %q: %w", f, err)
+			}
+			if !pool.AppendCertsFromPEM(pem) {
+				return nil, fmt.Errorf("no valid certificates found in %q", f)
+			}
+		}
+		h.client.Transport.(*http.Transport).TLSClientConfig.RootCAs = pool
+	}
+
+	return h, nil
 }
 
 // actions represents the parsed proxy path actions
