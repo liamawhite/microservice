@@ -51,17 +51,31 @@ spec:
             {{- end }}
             {{- end }}
             {{- end }}
+            {{- if $serviceConfig.config.additionalCACerts }}
+            {{- range $i, $caCert := $serviceConfig.config.additionalCACerts }}
+            - "--additional-ca-cert=/etc/additional-ca-certs/{{ $i }}/ca.crt"
+            {{- end }}
+            {{- end }}
           ports:
             - name: http
               containerPort: {{ $serviceConfig.config.port }}
               protocol: TCP
-          {{- if $serviceConfig.config.tls }}
-          {{- if or $serviceConfig.config.tls.existingSecret (and $serviceConfig.config.tls.cert $serviceConfig.config.tls.key) }}
+          {{- $hasTLS := and $serviceConfig.config.tls (or $serviceConfig.config.tls.existingSecret (and $serviceConfig.config.tls.cert $serviceConfig.config.tls.key)) }}
+          {{- $hasCACerts := $serviceConfig.config.additionalCACerts }}
+          {{- if or $hasTLS $hasCACerts }}
           volumeMounts:
+            {{- if $hasTLS }}
             - name: tls-certs
               mountPath: /etc/tls
               readOnly: true
-          {{- end }}
+            {{- end }}
+            {{- if $hasCACerts }}
+            {{- range $i, $caCert := $serviceConfig.config.additionalCACerts }}
+            - name: ca-cert-{{ $i }}
+              mountPath: /etc/additional-ca-certs/{{ $i }}
+              readOnly: true
+            {{- end }}
+            {{- end }}
           {{- end }}
           livenessProbe:
             {{- toYaml $serviceConfig.livenessProbe | nindent 12 }}
@@ -69,9 +83,11 @@ spec:
             {{- toYaml $serviceConfig.readinessProbe | nindent 12 }}
           resources:
             {{- toYaml $serviceConfig.resources | nindent 12 }}
-      {{- if $serviceConfig.config.tls }}
-      {{- if or $serviceConfig.config.tls.existingSecret (and $serviceConfig.config.tls.cert $serviceConfig.config.tls.key) }}
+      {{- $hasTLS := and $serviceConfig.config.tls (or $serviceConfig.config.tls.existingSecret (and $serviceConfig.config.tls.cert $serviceConfig.config.tls.key)) }}
+      {{- $hasCACerts := $serviceConfig.config.additionalCACerts }}
+      {{- if or $hasTLS $hasCACerts }}
       volumes:
+        {{- if $hasTLS }}
         - name: tls-certs
           secret:
             {{- if $serviceConfig.config.tls.existingSecret }}
@@ -79,7 +95,22 @@ spec:
             {{- else }}
             secretName: {{ include "microservice.serviceName" (dict "service" $service "root" $) }}-tls
             {{- end }}
-      {{- end }}
+        {{- end }}
+        {{- if $hasCACerts }}
+        {{- range $i, $caCert := $serviceConfig.config.additionalCACerts }}
+        - name: ca-cert-{{ $i }}
+          {{- if $caCert.existingSecret }}
+          secret:
+            secretName: {{ $caCert.existingSecret }}
+          {{- else if $caCert.existingConfigMap }}
+          configMap:
+            name: {{ $caCert.existingConfigMap }}
+          {{- else if $caCert.cert }}
+          configMap:
+            name: {{ include "microservice.serviceName" (dict "service" $service "root" $) }}-ca-{{ $i }}
+          {{- end }}
+        {{- end }}
+        {{- end }}
       {{- end }}
 ---
 {{- end }}

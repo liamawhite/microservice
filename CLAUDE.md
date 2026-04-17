@@ -229,6 +229,35 @@ curl -k https://localhost:8443/proxy/https://backend:8443/proxy/https://database
 - **Path Parsing**: Handles URL-normalized paths (e.g., `https://` → `https:/`)
 - **Client Configuration**: HTTP client configured with TLS support and optional `InsecureSkipVerify`
 
+## Custom CA Trust Bundle
+
+The service can append custom CA certificates to the system trust pool for upstream HTTPS verification, without disabling TLS verification entirely. This is useful when upstream services use certificates signed by an internal/private CA.
+
+### Usage
+
+```bash
+# Trust a single internal CA
+./microservice serve --additional-ca-cert=/path/to/internal-ca.pem
+
+# Trust multiple CAs alongside the system trust bundle
+./microservice serve \
+  --additional-ca-cert=/path/to/ca1.pem \
+  --additional-ca-cert=/path/to/ca2.pem
+```
+
+### Behaviour
+
+- Each `--additional-ca-cert` flag value must point to a PEM file containing one or more CA certificates.
+- The file is read at startup — if missing or containing no valid certificates, the server exits with an error.
+- Certificates are **appended** to the system trust pool (not replacing it), so public CA-signed certs continue to work.
+- Compatible with `--upstream-tls-insecure`: if both are specified, insecure takes precedence.
+
+### Implementation Details
+
+- **Handler option**: `WithCACertFiles(files []string)` in `pkg/proxy/handler.go`
+- **Cert pool building**: `x509.SystemCertPool()` (falls back to empty pool on unsupported platforms) with `pool.AppendCertsFromPEM()` for each file
+- **Validation**: `validateFlags()` in `cmd/serve.go` checks each file exists and parses as valid PEM before the server starts
+
 ## Common Commands
 
 ### Development
@@ -403,6 +432,7 @@ The service uses [Cobra](https://github.com/spf13/cobra) for CLI argument parsin
 | `--upstream-tls-insecure` | | bool | false | Skip TLS verification for upstream requests (useful for self-signed certs) |
 | `--propagate-request-headers` | | bool | true | Propagate incoming request headers to upstream hops |
 | `--propagate-response-headers` | | bool | true | Propagate upstream response headers back to the client |
+| `--additional-ca-cert` | | string (repeatable) | [] | Path to a PEM CA certificate to append to the system trust bundle (can be specified multiple times) |
 
 ### Usage Examples
 

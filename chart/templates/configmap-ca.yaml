@@ -1,0 +1,22 @@
+{{- range .Values.services }}
+{{- $service := . -}}
+{{- $serviceConfig := include "microservice.getServiceConfig" (dict "service" $service "root" $) | fromYaml -}}
+{{- if $serviceConfig.config.additionalCACerts }}
+{{- range $i, $caCert := $serviceConfig.config.additionalCACerts }}
+{{- if $caCert.cert }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "microservice.serviceName" (dict "service" $service "root" $) }}-ca-{{ $i }}
+  {{- with $.Values.namespace.name }}
+  namespace: {{ . }}
+  {{- end }}
+  labels:
+    {{- include "microservice.serviceLabels" (dict "service" $service "root" $) | nindent 4 }}
+data:
+  ca.crt: {{ $caCert.cert | b64dec }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end }}

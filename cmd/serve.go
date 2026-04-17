@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -23,6 +24,7 @@ var (
 	tlsCertFile              string
 	tlsKeyFile               string
 	upstreamTLSInsecure      bool
+	upstreamCACerts          []string
 	propagateRequestHeaders  bool
 	propagateResponseHeaders bool
 )
@@ -61,6 +63,7 @@ func init() {
 	serveCmd.Flags().StringVar(&tlsCertFile, "tls-cert", "", "Path to TLS certificate file (enables HTTPS when provided with --tls-key)")
 	serveCmd.Flags().StringVar(&tlsKeyFile, "tls-key", "", "Path to TLS key file (enables HTTPS when provided with --tls-cert)")
 	serveCmd.Flags().BoolVar(&upstreamTLSInsecure, "upstream-tls-insecure", false, "Skip TLS verification for upstream requests (useful for self-signed certs)")
+	serveCmd.Flags().StringArrayVar(&upstreamCACerts, "additional-ca-cert", nil, "Path to a PEM CA certificate to append to the system trust bundle (repeatable)")
 	serveCmd.Flags().BoolVar(&propagateRequestHeaders, "propagate-request-headers", true, "Propagate incoming request headers to upstream hops")
 	serveCmd.Flags().BoolVar(&propagateResponseHeaders, "propagate-response-headers", true, "Propagate upstream response headers back to the client")
 }
@@ -118,6 +121,21 @@ func validateFlags(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	// Validate additional CA cert files
+	for _, caFile := range upstreamCACerts {
+		if _, err := os.Stat(caFile); err != nil {
+			return fmt.Errorf("CA cert file not found %q: %w", caFile, err)
+		}
+		pemBytes, err := os.ReadFile(caFile)
+		if err != nil {
+			return fmt.Errorf("reading CA cert file %q: %w", caFile, err)
+		}
+		pool := x509.NewCertPool()
+		if !pool.AppendCertsFromPEM(pemBytes) {
+			return fmt.Errorf("CA cert file %q contains no valid PEM certificates", caFile)
+		}
+	}
+
 	return nil
 }
 
@@ -138,15 +156,21 @@ func runServer(cmd *cobra.Command, args []string) error {
 		slog.Bool("log_headers", logHeaders),
 		slog.Bool("tls_enabled", tlsEnabled),
 		slog.Bool("upstream_tls_insecure", upstreamTLSInsecure),
+		slog.Any("additional_ca_certs", upstreamCACerts),
 		slog.Bool("propagate_request_headers", propagateRequestHeaders),
 		slog.Bool("propagate_response_headers", propagateResponseHeaders),
 	)
 
-	handler := proxy.NewHandler(timeout, serviceName, logger,
+	handler, err := proxy.NewHandler(timeout, serviceName, logger,
 		proxy.WithHeaderLogging(logHeaders),
 		proxy.WithTLSInsecure(upstreamTLSInsecure),
+		proxy.WithCACertFiles(upstreamCACerts),
 		proxy.WithPropagateRequestHeaders(propagateRequestHeaders),
 		proxy.WithPropagateResponseHeaders(propagateResponseHeaders))
+	if err != nil {
+		logger.Error("Failed to initialize handler", slog.String("error", err.Error()))
+		return err
+	}
 
 	mux := http.NewServeMux()
 	mux.Handle("/", handler)

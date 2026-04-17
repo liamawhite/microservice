@@ -88,6 +88,17 @@ defaults:
     #   key: ""
     #   # Skip TLS verification for upstream HTTPS requests (useful for self-signed certs)
     #   insecure: false
+    # Additional CA certificates to append to the system trust bundle for upstream HTTPS verification.
+    # Useful when upstream services use certs signed by internal/private CAs.
+    # Each entry supports one of:
+    #   - existingSecret: name of a Secret with a 'ca.crt' key
+    #   - existingConfigMap: name of a ConfigMap with a 'ca.crt' key
+    #   - cert: base64-encoded PEM CA certificate (creates a ConfigMap automatically)
+    # additionalCACerts: []
+    # additionalCACerts:
+    #   - cert: "<base64-encoded-PEM>"
+    #   - existingSecret: "my-internal-ca-secret"
+    #   - existingConfigMap: "my-internal-ca-cm"
 
 # Array of services to deploy - each can override defaults
 # See values-single.yaml and values-three-tier.yaml for examples
