@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/liamawhite/microservice/pkg/proxy"
@@ -126,7 +127,7 @@ func validateFlags(cmd *cobra.Command, args []string) error {
 		if _, err := os.Stat(caFile); err != nil {
 			return fmt.Errorf("CA cert file not found %q: %w", caFile, err)
 		}
-		pemBytes, err := os.ReadFile(caFile)
+		pemBytes, err := os.ReadFile(filepath.Clean(caFile))
 		if err != nil {
 			return fmt.Errorf("reading CA cert file %q: %w", caFile, err)
 		}

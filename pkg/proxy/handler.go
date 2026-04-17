@@ -11,6 +11,7 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -115,7 +116,7 @@ func NewHandler(timeout time.Duration, serviceName string, logger *slog.Logger, 
 			pool = x509.NewCertPool()
 		}
 		for _, f := range h.caCertFiles {
-			pem, err := os.ReadFile(f)
+			pem, err := os.ReadFile(filepath.Clean(f))
 			if err != nil {
 				return nil, fmt.Errorf("reading CA cert %q: %w", f, err)
 			}
