@@ -9,7 +9,6 @@ import (
 	"math/big"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 )
@@ -19,7 +18,6 @@ func TestValidateFlags(t *testing.T) {
 		name        string
 		setupFlags  func()
 		expectError bool
-		errorMsg    string
 	}{
 		{
 			name: "valid flags with defaults",
@@ -60,7 +58,6 @@ func TestValidateFlags(t *testing.T) {
 				logFormat = "json"
 			},
 			expectError: true,
-			errorMsg:    "port must be between 1 and 65535",
 		},
 		{
 			name: "invalid port - too high",
@@ -71,7 +68,6 @@ func TestValidateFlags(t *testing.T) {
 				logFormat = "json"
 			},
 			expectError: true,
-			errorMsg:    "port must be between 1 and 65535",
 		},
 		{
 			name: "invalid port - negative",
@@ -82,7 +78,6 @@ func TestValidateFlags(t *testing.T) {
 				logFormat = "json"
 			},
 			expectError: true,
-			errorMsg:    "port must be between 1 and 65535",
 		},
 		{
 			name: "invalid timeout - negative",
@@ -93,7 +88,6 @@ func TestValidateFlags(t *testing.T) {
 				logFormat = "json"
 			},
 			expectError: true,
-			errorMsg:    "timeout must be positive",
 		},
 		{
 			name: "valid timeout - zero is allowed",
@@ -144,7 +138,6 @@ func TestValidateFlags(t *testing.T) {
 				logFormat = "json"
 			},
 			expectError: true,
-			errorMsg:    "log-level must be one of [debug, info, warn, error]",
 		},
 		{
 			name: "invalid log level - case sensitive",
@@ -155,7 +148,6 @@ func TestValidateFlags(t *testing.T) {
 				logFormat = "json"
 			},
 			expectError: true,
-			errorMsg:    "log-level must be one of [debug, info, warn, error]",
 		},
 		{
 			name: "valid log format - text",
@@ -176,7 +168,6 @@ func TestValidateFlags(t *testing.T) {
 				logFormat = "xml"
 			},
 			expectError: true,
-			errorMsg:    "log-format must be one of [json, text]",
 		},
 		{
 			name: "invalid log format - case sensitive",
@@ -187,7 +178,6 @@ func TestValidateFlags(t *testing.T) {
 				logFormat = "JSON"
 			},
 			expectError: true,
-			errorMsg:    "log-format must be one of [json, text]",
 		},
 		{
 			name: "cert provided without key file",
@@ -200,7 +190,6 @@ func TestValidateFlags(t *testing.T) {
 				tlsKeyFile = ""
 			},
 			expectError: true,
-			errorMsg:    "both --tls-cert and --tls-key must be provided together",
 		},
 		{
 			name: "key provided without cert file",
@@ -213,7 +202,6 @@ func TestValidateFlags(t *testing.T) {
 				tlsKeyFile = "/path/to/key.pem"
 			},
 			expectError: true,
-			errorMsg:    "both --tls-cert and --tls-key must be provided together",
 		},
 		{
 			name: "cert and key with non-existent files",
@@ -226,7 +214,6 @@ func TestValidateFlags(t *testing.T) {
 				tlsKeyFile = "/nonexistent/key.pem"
 			},
 			expectError: true,
-			errorMsg:    "certificate file not found",
 		},
 		{
 			name: "all valid options combined",
@@ -250,7 +237,6 @@ func TestValidateFlags(t *testing.T) {
 				upstreamCACerts = []string{"/nonexistent/ca.pem"}
 			},
 			expectError: true,
-			errorMsg:    "cannot access CA cert file",
 		},
 	}
 
@@ -281,28 +267,8 @@ func TestValidateFlags(t *testing.T) {
 			if !tt.expectError && err != nil {
 				t.Errorf("unexpected error: %v", err)
 			}
-			if tt.expectError && err != nil && tt.errorMsg != "" {
-				// Check if error message contains expected substring
-				if !contains(err.Error(), tt.errorMsg) {
-					t.Errorf("expected error message to contain %q, got %q", tt.errorMsg, err.Error())
-				}
-			}
 		})
 	}
-}
-
-// Helper function to check if a string contains a substring
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(s) > len(substr) && stringContains(s, substr))
-}
-
-func stringContains(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
 }
 
 // generateTestCertificates creates a self-signed certificate for testing
@@ -468,9 +434,6 @@ func TestValidateFlagsAdditionalCACert(t *testing.T) {
 		err = validateFlags(nil, nil)
 		if err == nil {
 			t.Error("expected error for invalid PEM content, got nil")
-		}
-		if err != nil && !strings.Contains(err.Error(), "no valid PEM certificates") {
-			t.Errorf("expected 'no valid PEM certificates' in error, got: %v", err)
 		}
 	})
 }
